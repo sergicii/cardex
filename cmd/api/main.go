@@ -3,16 +3,37 @@ package main
 import (
 	"log"
 
-	"github.com/gin-gonic/gin"
+	"github.com/operaodev/cardex/api"
+	"github.com/operaodev/cardex/api/handler"
 	"github.com/operaodev/cardex/internal/cards"
 	"github.com/operaodev/cardex/internal/search"
 	searchproviders "github.com/operaodev/cardex/internal/search/providers"
 )
 
 func main() {
-	// database.Connect()
+	// 1. Inicializar Repositorios (con datos mock por ahora)
+	repo := cards.NewMockRepository(getMockCards())
 
-	mockCards := []cards.Card{
+	// 2. Inicializar Servicios
+	cardsSvc := cards.NewService(repo)
+	
+	ygoProv := searchproviders.NewYGOProvider()
+	searchSvc := search.NewService(ygoProv)
+
+	// 3. Inicializar Handlers (Capa de Transporte)
+	cardsHandler := handler.NewCardsHandler(cardsSvc)
+	searchHandler := handler.NewSearchHandler(searchSvc)
+
+	// 4. Configurar e Iniciar Servidor
+	srv := api.NewServer(cardsHandler, searchHandler)
+
+	if err := srv.Start(":8080"); err != nil {
+		log.Fatalf("Error al iniciar el servidor: %v", err)
+	}
+}
+
+func getMockCards() []cards.Card {
+	return []cards.Card{
 		{
 			ID:           1,
 			Names:        map[cards.LangCode]string{"sp": "Mago Oscuro"},
@@ -39,31 +60,5 @@ func main() {
 			Descriptions: map[cards.LangCode]string{"en": "This legendary dragon is a powerful engine of destruction."},
 		},
 	}
-
-	repo := cards.NewMockRepository(mockCards)
-	service := cards.NewService(repo)
-	handler := cards.NewHandler(service)
-
-	ygoProv := searchproviders.NewYGOProvider()
-	searchSvc := search.NewService(ygoProv)
-	searchHandler := search.NewHandler(searchSvc)
-
-	r := gin.Default()
-
-	cardsGroup := r.Group("/cards")
-	{
-		// /cards/search?name=Kuriboh
-		cardsGroup.GET("/search", handler.GetByNameHandler)
-		// /cards/scg-1234
-		cardsGroup.GET("/:id", handler.GetByIDHandler)
-		// /cards/search/:provider/:id   (por id) /cards/search/ygo/1234
-		cardsGroup.GET("/search/:provider/:id", searchHandler.SearchByIDInProvider)
-		// /cards/search/:provider?name=Kuriboh
-		cardsGroup.GET("/search/:provider", searchHandler.SearchByNamesInProvider)
-	}
-
-	log.Println("Servidor iniciado en http://localhost:8080")
-	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Error al iniciar el servidor: %v", err)
-	}
 }
+

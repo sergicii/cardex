@@ -34,6 +34,7 @@ type Set struct {
 // Print: "reprint" or "new_artwork"
 type PrintedCard struct {
 	ID     uint64 `json:"id" gorm:"primaryKey;autoIncrement"`
+	Wanted uint   `json:"wanted" gorm:"default:0;not null;index"`
 	Code   string `json:"code,omitempty" gorm:"index"`
 	Rarity Rarity `json:"rarity,omitempty" gorm:"size:20;index"`
 
@@ -70,6 +71,7 @@ type Card struct {
 	Images       []CardImage         `json:"images,omitempty" gorm:"type:jsonb;serializer:json;default:'[]'"`
 
 	PrintedCards []PrintedCard `json:"printed_cards,omitempty" gorm:"foreignKey:CardID"`
+	MatchedLang  LangCode      `json:"matched_lang,omitempty" gorm:"-"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`

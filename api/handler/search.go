@@ -1,22 +1,22 @@
-package search
+package handler
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/operaodev/cardex/internal/search"
 )
 
-type Handler struct {
-	svc *Service
+type SearchHandler struct {
+	svc *search.Service
 }
 
-func NewHandler(s *Service) *Handler {
-	return &Handler{svc: s}
+func NewSearchHandler(s *search.Service) *SearchHandler {
+	return &SearchHandler{svc: s}
 }
 
-// SearchByIDInProvider handles GET /cards/search/:provider/:id
-// Busca una carta por su ID en el proveedor.
-func (h *Handler) SearchByIDInProvider(c *gin.Context) {
+// SearchByIDInProvider maneja GET /cards/search/:provider/:id
+func (h *SearchHandler) SearchByIDInProvider(c *gin.Context) {
 	provider := c.Param("provider")
 	id := c.Param("id")
 
@@ -29,9 +29,8 @@ func (h *Handler) SearchByIDInProvider(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// SearchByNamesInProvider handles GET /cards/search/:provider?name=Kuriboh
-// Busca cartas por sus nombres en el proveedor.
-func (h *Handler) SearchByNamesInProvider(c *gin.Context) {
+// SearchByNamesInProvider maneja GET /cards/search/:provider?name=Kuriboh
+func (h *SearchHandler) SearchByNamesInProvider(c *gin.Context) {
 	provider := c.Param("provider")
 	name := c.Query("name")
 
@@ -43,4 +42,3 @@ func (h *Handler) SearchByNamesInProvider(c *gin.Context) {
 
 	c.JSON(http.StatusOK, results)
 }
-

@@ -1,13 +1,15 @@
 package cards
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 // Repository define los métodos que nuestra capa de datos debe tener.
 // Ahora las firmas son mucho más limpias gracias al diseño relacional.
 type Repository interface {
 	Create(card *Card) error
 	GetByID(id uint64) (*Card, error)
-	GetByName(name string) ([]Card, error)
+	GetByName(tcg TCG, name string) ([]Card, error)
 }
 
 // repository es la implementación real que usará PostgreSQL y GORM.
@@ -40,12 +42,19 @@ func (r *repository) GetByID(id uint64) (*Card, error) {
 	return &card, nil
 }
 
-// GetByName busca cartas por nombre (coincidencia parcial, case-insensitive).
-func (r *repository) GetByName(name string) ([]Card, error) {
+// GetByName busca cartas por nombre y carga sus PrintedCards filtradas por el idioma que coincidió.
+func (r *repository) GetByName(tcg TCG, name string) ([]Card, error) {
 	var cards []Card
-
 	searchPattern := "%" + name + "%"
-	result := r.db.Where("name ILIKE ?", searchPattern).Find(&cards)
+
+	// Usamos un JOIN con jsonb_each_text para encontrar qué idioma (k) coincide con la búsqueda (v).
+	// Esto nos permite obtener el 'matched_lang' para cada carta.
+	result := r.db.Table("cards").
+		Select("cards.*, kv.k as matched_lang").
+		Joins("JOIN jsonb_each_text(cards.names) AS kv(k, v) ON kv.v ILIKE ?", searchPattern).
+		Preload("PrintedCards", "lang IN (SELECT k FROM jsonb_each_text(cards.names) WHERE v ILIKE ?)", searchPattern).
+		Find(&cards)
+
 	if result.Error != nil {
 		return nil, result.Error
 	}

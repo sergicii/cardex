@@ -22,10 +22,21 @@ type RecomendationPrintedCardDTO struct {
 	Print       Print  `json:"print"`
 }
 
+// DTO para llenar el catalogo
 type SummaryPrintedCardDTO struct {
 	RecomendationCardDTO
 	TotalForSale uint    `json:"onSale"`
 	MinPrice     float64 `json:"minPrice"`
 	AvgPrice     float64 `json:"avgPrice"`
 	MaxPrice     float64 `json:"maxPrice"`
+}
+
+type CardFilters struct {
+	Name      string `json:"name"`
+	TCG       TCG    `json:"tcg"`
+	Archetype string `json:"archetype"`
+	Type      string `json:"type"`
+	Subtype   string `json:"subtype"`
+	Page      int    `json:"page"`
+	Limit     int    `json:"limit"`
 }

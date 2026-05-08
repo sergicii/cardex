@@ -1,12 +1,15 @@
 package cards
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Service define el contrato de lo que nuestra aplicación puede hacer
 // con las cartas.
 type Service interface {
 	GetByID(id uint64) (*Card, error)
-	GetByName(name string) ([]Card, error)
+	GetByName(tcg TCG, name string) ([]Card, error)
 }
 
 // service implementa la interfaz Service e inyecta el repositorio.
@@ -30,9 +33,11 @@ func (s *service) GetByID(id uint64) (*Card, error) {
 }
 
 // GetByName obtiene cartas buscando por nombre.
-func (s *service) GetByName(name string) ([]Card, error) {
-	if name == "" {
-		return nil, fmt.Errorf("el nombre no puede estar vacío")
+func (s *service) GetByName(tcg TCG, name string) ([]Card, error) {
+	name = strings.TrimSpace(name)
+
+	if len(name) < 3 {
+		return nil, fmt.Errorf("el nombre de la carta debe tener al menos 3 caracteres")
 	}
-	return s.repo.GetByName(name)
+	return s.repo.GetByName(tcg, name)
 }

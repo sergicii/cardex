@@ -1,4 +1,4 @@
-package cards
+package handler
 
 import (
 	"encoding/json"
@@ -7,31 +7,36 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/operaodev/cardex/internal/cards"
 )
 
 // setupTestRouter configura el router de Gin en modo Test y registra las rutas del handler
-func setupTestRouter(handler *Handler) *gin.Engine {
+func setupTestRouter(h *CardsHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
-	
+
 	cardsGroup := r.Group("/cards")
 	{
-		cardsGroup.GET("/search", handler.GetByNameHandler)
-		cardsGroup.GET("/:id", handler.GetByIDHandler)
+		cardsGroup.GET("/search", h.GetByName)
+		cardsGroup.GET("/:id", h.GetByID)
 	}
-	
+
 	return r
 }
 
 func TestGetByIDHandler(t *testing.T) {
-	// 1. Arrange (Preparar datos)
-	mockCards := []Card{
-		{ID: 12345, Names: map[LangCode]string{"en": "Dark Magician"}},
+	mockSvc := &cards.MockService{
+		GetByIDFn: func(id uint64) (*cards.Card, error) {
+			return &cards.Card{
+				ID:           12345,
+				Names:        map[cards.LangCode]string{"en": "Dark Magician"},
+				Descriptions: map[cards.LangCode]string{"en": "El mago supremo."},
+			}, nil
+		},
 	}
-	mockRepo := NewMockRepository(mockCards)
-	svc := NewService(mockRepo)
-	handler := NewHandler(svc)
-	router := setupTestRouter(handler)
+
+	h := NewCardsHandler(mockSvc)
+	router := setupTestRouter(h)
 
 	// Crear una petición HTTP falsa
 	w := httptest.NewRecorder()
@@ -45,7 +50,7 @@ func TestGetByIDHandler(t *testing.T) {
 		t.Errorf("Se esperaba status 200, se obtuvo %d", w.Code)
 	}
 
-	var response Card
+	var response cards.Card
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatalf("Fallo al parsear el JSON de respuesta: %v", err)
@@ -57,28 +62,27 @@ func TestGetByIDHandler(t *testing.T) {
 }
 
 func TestGetByNameHandler(t *testing.T) {
-	// 1. Arrange
-	mockCards := []Card{
-		{ID: 1, Names: map[LangCode]string{"en": "Dark Magician"}},
-		{ID: 2, Names: map[LangCode]string{"en": "Dark Magician"}},
+	mockSvc := &cards.MockService{
+		GetByNameFn: func(name string) ([]cards.Card, error) {
+			return []cards.Card{
+				{ID: 1, Names: map[cards.LangCode]string{"en": "Dark Magician"}},
+				{ID: 2, Names: map[cards.LangCode]string{"en": "Dark Magician Girl"}},
+			}, nil
+		},
 	}
-	mockRepo := NewMockRepository(mockCards)
-	svc := NewService(mockRepo)
-	handler := NewHandler(svc)
-	router := setupTestRouter(handler)
+	h := NewCardsHandler(mockSvc)
+	router := setupTestRouter(h)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/cards/search?name=Dark%20Magician", nil)
 
-	// 2. Act
 	router.ServeHTTP(w, req)
 
-	// 3. Assert
 	if w.Code != http.StatusOK {
 		t.Errorf("Se esperaba status 200, se obtuvo %d", w.Code)
 	}
 
-	var response []Card
+	var response []cards.Card
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatalf("Fallo al parsear el JSON de respuesta: %v", err)
