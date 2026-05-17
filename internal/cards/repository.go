@@ -10,7 +10,7 @@ type Repository interface {
 	Create(card *Card) error
 	Upsert(cards []Card) (int, error)
 	GetByID(id uint64) (*Card, error)
-	GetSuggestions(tcg TCG, lang LangCode, name string) ([]RecommendationCardDTO, error)
+	GetSuggestions(tcg TCG, lang LangCode, name string) (*SuggestionResult, error)
 	GetCatalog(filters CatalogFilters) (*PaginatedResult[SummaryCardDTO], error)
 }
 
@@ -48,7 +48,7 @@ func (r *repository) Upsert(cards []Card) (int, error) {
 				{Name: "code"},
 				{Name: "lang"},
 				{Name: "rarity"},
-				{Name: "set_name"},
+				{Name: "set_english_name"},
 			},
 			DoUpdates: clause.AssignmentColumns([]string{
 				"english_name", "name", "description",
@@ -80,15 +80,17 @@ func (r *repository) GetByID(id uint64) (*Card, error) {
 	return &card, nil
 }
 
-// GetSuggestions busca cartas por nombre, tcg y lang.
-// A nivel SQL ejecuta un SELECT de campos específicos con ILIKE para coincidencias parciales
-// y LIMIT 10. Devuelve un DTO ligero con los datos mínimos para mostrar sugerencias.
-func (r *repository) GetSuggestions(tcg TCG, lang LangCode, name string) ([]RecommendationCardDTO, error) {
+// GetSuggestions busca cartas por nombre, tcg y lang y devuelve un SuggestionResult con:
+//   - results: todos los prints/ediciones individuales que coinciden (máx. 10).
+//   - suggestions: un CatalogFilters único por carta (deduplicado por english_name en memoria).
+//
+// La deduplicación se hace en Go tras la query: por cada english_name distinto se genera
+// un CatalogFilters con el nombre de la carta listo para usarse como filtro de catálogo.
+func (r *repository) GetSuggestions(tcg TCG, lang LangCode, name string) (*SuggestionResult, error) {
 	var results []RecommendationCardDTO
-	searchPattern := name + "%"
+	searchPattern := "%" + name + "%"
 
-	query := r.db.Model(&Card{}).
-		Select(`
+	query := r.db.Model(&Card{}).Select(`
 		id,
 		tcg,
 		name,
@@ -97,9 +99,10 @@ func (r *repository) GetSuggestions(tcg TCG, lang LangCode, name string) ([]Reco
 		rarity,
 		set_name,
 		print,
-		COALESCE(NULLIF(print_image, ''), card_images->0->>'image_url') AS image
+		lang,
+		card_images->0->>'image_url_small' AS image
 	`).
-		Where("name ILIKE ? OR english_name ILIKE ?", searchPattern, searchPattern).
+		Where("name ILIKE ?", searchPattern).
 		Limit(10)
 
 	if tcg != "" {
@@ -112,7 +115,26 @@ func (r *repository) GetSuggestions(tcg TCG, lang LangCode, name string) ([]Reco
 	if err := query.Scan(&results).Error; err != nil {
 		return nil, err
 	}
-	return results, nil
+
+	// Construir suggestions: un CatalogFilters por carta única (deduplicado por name).
+	seen := make(map[string]struct{})
+	var suggestions []CatalogFilters
+	for _, card := range results {
+		if _, ok := seen[card.Name]; ok {
+			continue
+		}
+		seen[card.Name] = struct{}{}
+		suggestions = append(suggestions, CatalogFilters{
+			Name: card.Name,
+			TCG:  card.TCG,
+			Lang: card.Lang,
+		})
+	}
+
+	return &SuggestionResult{
+		Suggestions: suggestions,
+		Results:     results,
+	}, nil
 }
 
 // GetCatalog busca cartas aplicando filtros opcionales con paginación.

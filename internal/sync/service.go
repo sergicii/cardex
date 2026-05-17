@@ -59,8 +59,10 @@ func (s *SyncService) SyncAll(tcg string) (int, error) {
 // mapResultsToCards convierte un slice de search.ResultCard al modelo flat de cards.Card.
 // Solo genera filas para resultados que tengan impresiones físicas (PrintedCards).
 // Genera una fila por cada PrintedCard, usando el idioma del print como clave de nombre/descripción.
+// Deduplica los registros en base a su clave única para evitar errores ON CONFLICT en la base de datos.
 func mapResultsToCards(results []search.ResultCard) []cards.Card {
 	var out []cards.Card
+	seen := make(map[string]bool)
 
 	for _, r := range results {
 		if r.ExternalID == "" {
@@ -94,6 +96,13 @@ func mapResultsToCards(results []search.ResultCard) []cards.Card {
 			if tcg == "" {
 				tcg = r.TCG
 			}
+
+			// La identidad única es: ExternalID + Code + Lang + Rarity + SetEnglishName (SetName)
+			key := fmt.Sprintf("%s|%s|%s|%s|%s", r.ExternalID, p.Code, lang, p.Rarity, p.SetName)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
 
 			card := cards.Card{
 				ExternalID:  r.ExternalID,

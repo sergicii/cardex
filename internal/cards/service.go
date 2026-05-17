@@ -8,7 +8,7 @@ import (
 // Service define el contrato de lo que nuestra aplicación puede hacer con las cartas.
 type Service interface {
 	GetByID(id uint64) (*Card, error)
-	GetSuggestions(tcg TCG, lang LangCode, name string) ([]RecommendationCardDTO, error)
+	GetSuggestions(tcg TCG, lang LangCode, name string) (*SuggestionResult, error)
 	GetCatalog(filters CatalogFilters) (*PaginatedResult[SummaryCardDTO], error)
 }
 
@@ -36,7 +36,7 @@ func (s *service) GetByID(id uint64) (*Card, error) {
 // GetSuggestions obtiene recomendaciones de cartas buscando por nombre.
 // Se utiliza en barras de búsqueda o componentes de autocompletado en el frontend.
 // Exige un mínimo de 3 caracteres para evitar queries demasiado amplias o poco performantes.
-func (s *service) GetSuggestions(tcg TCG, lang LangCode, name string) ([]RecommendationCardDTO, error) {
+func (s *service) GetSuggestions(tcg TCG, lang LangCode, name string) (*SuggestionResult, error) {
 	name = strings.TrimSpace(name)
 	if len(name) < 3 {
 		return nil, fmt.Errorf("el nombre de búsqueda debe tener al menos 3 caracteres")

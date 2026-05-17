@@ -62,10 +62,15 @@ func TestGetByIDHandler(t *testing.T) {
 
 func TestGetSuggestionsHandler(t *testing.T) {
 	mockSvc := &cards.MockService{
-		GetSuggestionsFn: func(tcg cards.TCG, lang cards.LangCode, name string) ([]cards.RecommendationCardDTO, error) {
-			return []cards.RecommendationCardDTO{
-				{ID: 1, Name: "Dark Magician", EnglishName: "Dark Magician"},
-				{ID: 2, Name: "Dark Magician Girl", EnglishName: "Dark Magician Girl"},
+		GetSuggestionsFn: func(tcg cards.TCG, lang cards.LangCode, name string) (*cards.SuggestionResult, error) {
+			return &cards.SuggestionResult{
+				Suggestions: []cards.CatalogFilters{
+					{Name: "Dark Magician", TCG: tcg, Lang: lang},
+				},
+				Results: []cards.RecommendationCardDTO{
+					{ID: 1, Name: "Dark Magician", EnglishName: "Dark Magician"},
+					{ID: 2, Name: "Dark Magician Girl", EnglishName: "Dark Magician Girl"},
+				},
 			}, nil
 		},
 	}
@@ -81,14 +86,17 @@ func TestGetSuggestionsHandler(t *testing.T) {
 		t.Errorf("Se esperaba status 200, se obtuvo %d", w.Code)
 	}
 
-	var response []cards.RecommendationCardDTO
+	var response cards.SuggestionResult
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatalf("Fallo al parsear el JSON de respuesta: %v", err)
 	}
 
-	if len(response) != 2 {
-		t.Errorf("Se esperaban 2 cartas, se obtuvieron %d", len(response))
+	if len(response.Suggestions) != 1 {
+		t.Errorf("Se esperaba 1 sugerencia, se obtuvieron %d", len(response.Suggestions))
+	}
+	if len(response.Results) != 2 {
+		t.Errorf("Se esperaban 2 resultados, se obtuvieron %d", len(response.Results))
 	}
 }
 

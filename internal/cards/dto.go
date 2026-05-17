@@ -12,6 +12,7 @@ type RecommendationCardDTO struct {
 	SetName     string `json:"set_name"`
 	Image       string `json:"image"`
 	Print       Print  `json:"print"`
+	Lang        LangCode `json:"lang"`
 }
 
 // SummaryCardDTO representa una carta en el catálogo/listado.
@@ -32,6 +33,11 @@ type SummaryCardDTO struct {
 	Print       Print    `json:"print,omitempty"`
 	Wanted      uint     `json:"wanted"`
 	Image       string   `json:"image"`
+}
+
+type SuggestionResult struct {
+	Results     []RecommendationCardDTO `json:"results"`
+	Suggestions []CatalogFilters        `json:"suggestions"`
 }
 
 // PaginatedResult envuelve una lista de resultados con metadata de paginación.
