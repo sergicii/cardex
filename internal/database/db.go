@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/operaodev/cardex/internal/cards"
+	"github.com/operaodev/cardex/internal/inventory"
+	"github.com/operaodev/cardex/internal/users"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -33,9 +35,15 @@ func Connect() {
 		log.Fatalf("Error conectando a la base de datos: %v", err)
 	}
 
-	// AutoMigrate crea o actualiza la tabla 'cards' con todas las columnas,
-	// JSONBs, índices compuestos y GIN definidos en el modelo.
-	if err = db.AutoMigrate(&cards.Card{}); err != nil {
+	// AutoMigrate crea o actualiza las tablas con todas las columnas,
+	// JSONBs, índices compuestos y GIN definidos en los modelos.
+	// El orden importa: users y cards deben existir antes de que inventory cree sus FK.
+	if err = db.AutoMigrate(
+		&cards.Card{},
+		&users.User{},
+		&inventory.Inventory{},
+		&inventory.InventoryLog{},
+	); err != nil {
 		log.Fatalf("Error en automigración: %v", err)
 	}
 

@@ -8,9 +8,11 @@ import (
 	"github.com/operaodev/cardex/api/handler"
 	"github.com/operaodev/cardex/internal/cards"
 	"github.com/operaodev/cardex/internal/database"
+	"github.com/operaodev/cardex/internal/inventory"
 	"github.com/operaodev/cardex/internal/search"
 	searchproviders "github.com/operaodev/cardex/internal/search/providers"
 	syncsvc "github.com/operaodev/cardex/internal/sync"
+	"github.com/operaodev/cardex/internal/users"
 )
 
 func main() {
@@ -38,8 +40,16 @@ func main() {
 	searchHandler := handler.NewSearchHandler(searchSvc)
 	syncHandler := handler.NewSyncHandler(syncService)
 
+	usersRepo := users.NewRepository(database.DB)
+	usersSvc := users.NewService(usersRepo)
+	usersHandler := handler.NewUsersHandler(usersSvc)
+
+	invRepo := inventory.NewRepository(database.DB)
+	invSvc := inventory.NewService(invRepo)
+	inventoryHandler := handler.NewInventoryHandler(invSvc)
+
 	// 5. Configurar e Iniciar Servidor
-	srv := api.NewServer(cardsHandler, searchHandler, syncHandler)
+	srv := api.NewServer(cardsHandler, searchHandler, syncHandler, usersHandler, inventoryHandler)
 
 	if err := srv.Start(":8080"); err != nil {
 		log.Fatalf("Error al iniciar el servidor: %v", err)

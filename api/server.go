@@ -8,13 +8,21 @@ import (
 )
 
 type Server struct {
-	router        *gin.Engine
-	cardsHandler  *handler.CardsHandler
-	searchHandler *handler.SearchHandler
-	syncHandler   *handler.SyncHandler
+	router           *gin.Engine
+	cardsHandler     *handler.CardsHandler
+	searchHandler    *handler.SearchHandler
+	syncHandler      *handler.SyncHandler
+	usersHandler     *handler.UsersHandler
+	inventoryHandler *handler.InventoryHandler
 }
 
-func NewServer(cardsH *handler.CardsHandler, searchH *handler.SearchHandler, syncH *handler.SyncHandler) *Server {
+func NewServer(
+	cardsH *handler.CardsHandler,
+	searchH *handler.SearchHandler,
+	syncH *handler.SyncHandler,
+	usersH *handler.UsersHandler,
+	inventoryH *handler.InventoryHandler,
+) *Server {
 	router := gin.Default()
 
 	// Middleware de CORS
@@ -33,10 +41,12 @@ func NewServer(cardsH *handler.CardsHandler, searchH *handler.SearchHandler, syn
 	})
 
 	s := &Server{
-		router:        router,
-		cardsHandler:  cardsH,
-		searchHandler: searchH,
-		syncHandler:   syncH,
+		router:           router,
+		cardsHandler:     cardsH,
+		searchHandler:    searchH,
+		syncHandler:      syncH,
+		usersHandler:     usersH,
+		inventoryHandler: inventoryH,
 	}
 	s.setupRoutes()
 	return s
@@ -68,6 +78,34 @@ func (s *Server) setupRoutes() {
 		syncGroup.GET("/status", s.syncHandler.SyncStatus)
 		// POST /sync/ygo
 		syncGroup.POST("/:tcg", s.syncHandler.TriggerSync)
+	}
+
+	// Rutas de usuarios (auth)
+	usersGroup := s.router.Group("/users")
+	{
+		// POST /users/register
+		usersGroup.POST("/register", s.usersHandler.Register)
+		// POST /users/login
+		usersGroup.POST("/login", s.usersHandler.Login)
+	}
+
+	// Rutas de inventario
+	invGroup := s.router.Group("/inventory")
+	{
+		// GET /inventory/:user_id
+		invGroup.GET("/:user_id", s.inventoryHandler.GetInventory)
+		// GET /inventory/logs/:inventory_id
+		invGroup.GET("/logs/:inventory_id", s.inventoryHandler.GetLogs)
+		// POST /inventory/restock
+		invGroup.POST("/restock", s.inventoryHandler.Restock)
+		// POST /inventory/sell
+		invGroup.POST("/sell", s.inventoryHandler.Sell)
+		// POST /inventory/loss
+		invGroup.POST("/loss", s.inventoryHandler.RegisterLoss)
+		// POST /inventory/return
+		invGroup.POST("/return", s.inventoryHandler.RegisterReturn)
+		// POST /inventory/price
+		invGroup.POST("/price", s.inventoryHandler.ChangePrice)
 	}
 }
 
