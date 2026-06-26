@@ -123,6 +123,18 @@ func (y *YGOProvider) fetchAll(englishCards []YGOCard) ([]products.Product, erro
 		} else {
 			log.Printf("[fetchAll] error HTTP fase %s para %q (%s): %v",
 				phase, cardName, r.Request.URL, err)
+
+			if cardName != "" && (phase == "card" || phase == "card-retry") {
+				mu.Lock()
+				if card, ok := enCardByName[cardName]; ok {
+					if phase == "card" {
+						failedCards = append(failedCards, card)
+					} else {
+						failedCardsRetry = append(failedCardsRetry, card)
+					}
+				}
+				mu.Unlock()
+			}
 		}
 	})
 
@@ -176,6 +188,7 @@ func (y *YGOProvider) fetchAll(englishCards []YGOCard) ([]products.Product, erro
 				ctx.Put("id", fmt.Sprintf("%d", card.ID))
 				wikiURL := fmt.Sprintf("%s/wiki/%s", y.yugipediaBaseUrl, url.PathEscape(card.Name))
 				_ = c.Request("GET", wikiURL, nil, ctx, nil)
+				log.Println(wikiURL)
 			}
 
 			c.Wait()
@@ -286,7 +299,6 @@ func (y *YGOProvider) fetchAll(englishCards []YGOCard) ([]products.Product, erro
 	for i := range allItems {
 		if allItems[i].Type == products.ProductTypeSet {
 			allItems[i].QuantityPerSet = 0
-			allItems[i].QuantityPerBox = 0
 		}
 	}
 
@@ -438,9 +450,6 @@ func (y *YGOProvider) handleSetPage(e *colly.HTMLElement, mu *sync.Mutex, allIte
 	// Enrich existing items with set metadata
 	for _, item := range setIndex[setExternalID] {
 		item.SetType = setInfo.SetType
-		if setInfo.SetImage != "" && item.SetImage == "" {
-			item.SetImage = setInfo.SetImage
-		}
 	}
 
 	// Enrich QuantityPerSet from the inline card list entries (already parsed from tabs)

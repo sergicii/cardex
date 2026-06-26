@@ -51,21 +51,26 @@ func main() {
 		os.Getenv("SMTP_USER"),
 		os.Getenv("SMTP_PASS"),
 		os.Getenv("SMTP_FROM"),
-		os.Getenv("APP_URL"),
 	)
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET es obligatorio")
 	}
-	jwtDuration := 24 * time.Hour
-	if d, err := time.ParseDuration(os.Getenv("JWT_DURATION")); err == nil {
-		jwtDuration = d
+
+	accessDuration := 15 * time.Minute
+	if d, err := time.ParseDuration(os.Getenv("JWT_ACCESS_DURATION")); err == nil {
+		accessDuration = d
+	}
+
+	refreshDuration := 720 * time.Hour // 30 días
+	if d, err := time.ParseDuration(os.Getenv("JWT_REFRESH_DURATION")); err == nil {
+		refreshDuration = d
 	}
 
 	usersRepo := users.NewRepository(database.DB)
 	usersSvc := users.NewService(usersRepo, smtpMailer)
-	usersHandler := handler.NewUsersHandler(usersSvc, jwtSecret, jwtDuration)
+	usersHandler := handler.NewUsersHandler(usersSvc, jwtSecret, accessDuration, refreshDuration)
 
 	stockRepo := stock.NewRepository(database.DB)
 	stockSvc := stock.NewService(stockRepo)

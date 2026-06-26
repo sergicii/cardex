@@ -10,9 +10,9 @@ const (
 	scrapeBatchSize      = 300
 	scrapeBatchPause     = 3 * time.Second
 	scrapeParallelism    = 4
-	scrapeDelay          = 1 * time.Second
-	scrapeRequestTimeout = 50 * time.Second
-	httpClientTimeout    = 50 * time.Second
+	scrapeDelay          = 1200 * time.Millisecond
+	scrapeRequestTimeout = 60 * time.Second
+	httpClientTimeout    = 60 * time.Second
 	progressLogInterval  = 100
 )
 

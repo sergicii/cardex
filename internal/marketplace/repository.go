@@ -112,9 +112,9 @@ func (r *repository) GetOffers(input OffersInput) (OffersPage, error) {
 			StockID:       s.ID,
 			Condition:     s.Condition,
 			IsForTrade:    s.IsForTrade,
-			Price:         s.Price.InexactFloat64(),
-			DiscountPrice: s.DiscountPrice.InexactFloat64(),
-			Discount:      s.DiscountPercentage().InexactFloat64(),
+			Price:         float64(s.Price),
+			DiscountPrice: float64(s.DiscountPrice),
+			Discount:      float64((s.Price - s.DiscountPrice) / s.Price * 100),
 			Quantity:      uint(s.Quantity),
 		})
 	}

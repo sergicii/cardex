@@ -35,9 +35,13 @@ func NewServer(
 ) *Server {
 	router := gin.Default()
 
-	// Middleware de CORS
+	// Middleware de CORS (sin wildcard para soportar cookies/credenciales)
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
@@ -89,12 +93,18 @@ func (s *Server) setupRoutes() {
 	// Rutas de usuarios (auth)
 	usersGroup := s.router.Group("/users")
 	{
-		// POST /users/register
+		// POST /users/guest — registro como invitado
+		usersGroup.POST("/guest", s.usersHandler.RegisterGuest)
+		// POST /users/send-code — enviar código de verificación al email
+		usersGroup.POST("/send-code", s.usersHandler.SendCode)
+		// POST /users/register — completar registro con código de verificación
 		usersGroup.POST("/register", s.usersHandler.Register)
 		// POST /users/login
 		usersGroup.POST("/login", s.usersHandler.Login)
-		// GET /users/verify?token=...
-		usersGroup.GET("/verify", s.usersHandler.VerifyEmail)
+		// POST /users/refresh — renovar access token usando refresh token
+		usersGroup.POST("/refresh", s.usersHandler.RefreshToken)
+		// POST /users/upgrade — invitado hace upgrade a cuenta completa (requiere auth)
+		usersGroup.POST("/upgrade", middleware.AuthMiddleware(s.jwtSecret), s.usersHandler.UpgradeGuest)
 		// GET /users/me (requiere auth)
 		usersGroup.GET("/me", middleware.AuthMiddleware(s.jwtSecret), s.usersHandler.GetMe)
 	}

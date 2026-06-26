@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
+	custompacks "github.com/operaodev/cardex/internal/custom_packs"
 	"github.com/operaodev/cardex/internal/products"
 	"github.com/operaodev/cardex/internal/stock"
 	"github.com/operaodev/cardex/internal/users"
-	"github.com/operaodev/cardex/internal/custom_packs"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -36,9 +36,6 @@ func Connect() {
 		log.Fatalf("Error conectando a la base de datos: %v", err)
 	}
 
-	// AutoMigrate crea o actualiza las tablas con todas las columnas,
-	// JSONBs, índices compuestos y GIN definidos en los modelos.
-	// El orden importa: users, cards y products deben existir antes de que stock cree sus FK.
 	if err = db.AutoMigrate(
 		&products.Product{},
 		&users.User{},
@@ -48,6 +45,9 @@ func Connect() {
 	); err != nil {
 		log.Fatalf("Error en automigración: %v", err)
 	}
+
+	// Partial unique: solo emails no vacíos son únicos (invitados tienen email='')
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uni_users_email ON users(email) WHERE email <> ''`)
 
 	log.Println("Conectado a PostgreSQL y base de datos migrada con éxito")
 	DB = db

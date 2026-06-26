@@ -455,7 +455,6 @@ func setInfoToProducts(sets map[string]*SetInfo) []products.Product {
 				SetRegionCode: set.Prefixes[lang],
 				SetCode:       extractSetCode(set.Prefixes[lang]),
 				SetType:       set.SetType,
-				SetImage:      set.SetImage,
 				SetImageLarge: deriveSetImageLarge(set.SetImage),
 				SetImageSmall: deriveSetImageSmall(set.SetImage),
 			}
@@ -494,7 +493,6 @@ func convertSetToProducts(set *SetInfo, cardEntries map[products.LangCode][]SetC
 			}
 
 			if set.SetImage != "" {
-				item.SetImage = set.SetImage
 				item.SetImageLarge = deriveSetImageLarge(set.SetImage)
 				item.SetImageSmall = deriveSetImageSmall(set.SetImage)
 			}
@@ -555,21 +553,27 @@ func extractSetCode(regionCode string) string {
 }
 
 func deriveSetImageLarge(setImage string) string {
-	if setImage == "" || !strings.Contains(setImage, "yugipedia.com") {
+	if setImage == "" {
 		return ""
 	}
 	pngIdx := strings.Index(setImage, ".png")
 	if pngIdx == -1 {
-		return ""
+		return setImage
 	}
 	url := setImage[:pngIdx+4]
-	return strings.ReplaceAll(url, "//thumb", "//")
+	if strings.Contains(url, "/thumb/") {
+		return strings.ReplaceAll(url, "/thumb/", "/")
+	}
+	return url
 }
 
 func deriveSetImageSmall(setImage string) string {
-	if setImage == "" || !strings.Contains(setImage, "yugipedia.com") {
+	if setImage == "" {
 		return ""
 	}
 	re := regexp.MustCompile(`\d+px-`)
-	return re.ReplaceAllString(setImage, "257px-")
+	if re.MatchString(setImage) {
+		return re.ReplaceAllString(setImage, "257px-")
+	}
+	return setImage
 }

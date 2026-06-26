@@ -3,7 +3,6 @@ package stock
 import (
 	"errors"
 
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -13,7 +12,7 @@ type Repository interface {
 	FindByUserAndProductAndCondition(userID string, productID uint64, condition Condition) (*Stock, error)
 	GetByUserID(userID string) ([]Stock, error)
 	UpdateQuantity(id uint64, quantity int) error
-	UpdatePrice(id uint64, price, discountPrice decimal.Decimal) error
+	UpdatePrice(id uint64, price, discountPrice float64) error
 	Update(stock *Stock) error
 
 	CreateLog(log *Log) error
@@ -81,7 +80,7 @@ func (r *repository) UpdateQuantity(id uint64, quantity int) error {
 	return nil
 }
 
-func (r *repository) UpdatePrice(id uint64, price, discountPrice decimal.Decimal) error {
+func (r *repository) UpdatePrice(id uint64, price, discountPrice float64) error {
 	result := r.db.Model(&Stock{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"price":          price,
 		"discount_price": discountPrice,

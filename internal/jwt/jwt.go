@@ -7,22 +7,26 @@ import (
 	jwtv5 "github.com/golang-jwt/jwt/v5"
 )
 
-// Claims contiene los datos del usuario autenticado dentro del token JWT.
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
+
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Name   string `json:"name"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	TokenType string `json:"token_type"`
 	jwtv5.RegisteredClaims
 }
 
-// GenerateToken crea un token JWT firmado con las credenciales del usuario.
-// El token expira después de duration.
 func GenerateToken(userID, email, name, secret string, duration time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
-		UserID: userID,
-		Email:  email,
-		Name:   name,
+		UserID:    userID,
+		Email:     email,
+		Name:      name,
+		TokenType: TokenTypeAccess,
 		RegisteredClaims: jwtv5.RegisteredClaims{
 			IssuedAt:  jwtv5.NewNumericDate(now),
 			ExpiresAt: jwtv5.NewNumericDate(now.Add(duration)),
@@ -37,8 +41,48 @@ func GenerateToken(userID, email, name, secret string, duration time.Duration) (
 	return signed, nil
 }
 
-// ValidateToken verifica la firma y expiración del token JWT y devuelve los claims.
+func GenerateRefreshToken(userID, secret string, duration time.Duration) (string, error) {
+	now := time.Now()
+	claims := &Claims{
+		UserID:    userID,
+		TokenType: TokenTypeRefresh,
+		RegisteredClaims: jwtv5.RegisteredClaims{
+			IssuedAt:  jwtv5.NewNumericDate(now),
+			ExpiresAt: jwtv5.NewNumericDate(now.Add(duration)),
+		},
+	}
+
+	token := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("firmar refresh token: %w", err)
+	}
+	return signed, nil
+}
+
 func ValidateToken(tokenString, secret string) (*Claims, error) {
+	claims, err := parseClaims(tokenString, secret)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeAccess {
+		return nil, fmt.Errorf("tipo de token inválido: esperado access")
+	}
+	return claims, nil
+}
+
+func ValidateRefreshToken(tokenString, secret string) (*Claims, error) {
+	claims, err := parseClaims(tokenString, secret)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeRefresh {
+		return nil, fmt.Errorf("tipo de token inválido: esperado refresh")
+	}
+	return claims, nil
+}
+
+func parseClaims(tokenString, secret string) (*Claims, error) {
 	token, err := jwtv5.ParseWithClaims(tokenString, &Claims{}, func(t *jwtv5.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwtv5.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("método de firma inesperado: %v", t.Header["alg"])

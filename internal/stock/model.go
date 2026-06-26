@@ -5,7 +5,6 @@ import (
 
 	"github.com/operaodev/cardex/internal/products"
 	"github.com/operaodev/cardex/internal/users"
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -26,11 +25,11 @@ type Stock struct {
 	ProductID uint64    `gorm:"not null;uniqueIndex:idx_stock_owner,priority:2" json:"product_id"`
 	Condition Condition `gorm:"not null;uniqueIndex:idx_stock_owner,priority:3" json:"condition"`
 
-	IsForSale     bool            `gorm:"default:true;not null"                json:"is_for_sale"`
-	IsForTrade    bool            `gorm:"default:false;not null"               json:"is_for_trade"`
-	Quantity      int             `gorm:"default:1;not null"                   json:"quantity"`
-	Price         decimal.Decimal `gorm:"type:numeric(10,2);default:0;not null" json:"price"`
-	DiscountPrice decimal.Decimal `gorm:"type:numeric(10,2);default:0;not null" json:"discount_price"`
+	IsForSale     bool    `gorm:"default:true;not null"                json:"is_for_sale"`
+	IsForTrade    bool    `gorm:"default:false;not null"               json:"is_for_trade"`
+	Quantity      int     `gorm:"default:1;not null"                   json:"quantity"`
+	Price         float64 `gorm:"type:numeric(10,2);default:0;not null" json:"price"`
+	DiscountPrice float64 `gorm:"type:numeric(10,2);default:0;not null" json:"discount_price"`
 
 	User    users.User       `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"  json:"-"`
 	Product products.Product `gorm:"foreignKey:ProductID;references:ID;constraint:OnDelete:RESTRICT" json:"product"`
@@ -43,25 +42,15 @@ type Stock struct {
 
 // HasDiscount retorna true si hay un precio de descuento activo
 func (s *Stock) HasDiscount() bool {
-	return s.DiscountPrice.IsPositive() && s.DiscountPrice.LessThan(s.Price)
+	return s.DiscountPrice > 0 && s.DiscountPrice < s.Price
 }
 
 // EffectivePrice retorna el precio que el comprador paga
-func (s *Stock) EffectivePrice() decimal.Decimal {
+func (s *Stock) EffectivePrice() float64 {
 	if s.HasDiscount() {
 		return s.DiscountPrice
 	}
 	return s.Price
-}
-
-// DiscountPercentage retorna el % de descuento para mostrar en UI ("34% off")
-func (s *Stock) DiscountPercentage() decimal.Decimal {
-	if !s.HasDiscount() {
-		return decimal.Zero
-	}
-	// (150 - 99) / 150 * 100 = 34%
-	diff := s.Price.Sub(s.DiscountPrice)
-	return diff.Div(s.Price).Mul(decimal.NewFromInt(100)).Round(0)
 }
 
 func (s *Stock) BeforeUpdate(tx *gorm.DB) error {
@@ -77,7 +66,7 @@ func (s *Stock) BeforeUpdate(tx *gorm.DB) error {
 
 	var logs []Log
 
-	if !old.Price.Equal(s.Price) {
+	if old.Price != s.Price {
 		logs = append(logs, Log{
 			StockID:       s.ID,
 			LogType:       LogPriceChange,
@@ -86,7 +75,7 @@ func (s *Stock) BeforeUpdate(tx *gorm.DB) error {
 		})
 	}
 
-	if !old.DiscountPrice.Equal(s.DiscountPrice) {
+	if old.DiscountPrice != s.DiscountPrice {
 		logs = append(logs, Log{
 			StockID:          s.ID,
 			LogType:          LogDiscountChange,
@@ -106,7 +95,7 @@ type LogType string
 
 const (
 	// Físicos
-	LogUnboxing    LogType = "unboxing"   // apertura de caja
+	LogUnboxing   LogType = "unboxing"   // apertura de caja
 	LogAdd        LogType = "add"        // creación inicial
 	LogRestock    LogType = "restock"    // entrada de stock
 	LogSale       LogType = "sale"       // venta
@@ -135,10 +124,10 @@ type Log struct {
 	NewStock      int `gorm:"default:0" json:"new_stock"`
 
 	// Precio
-	PreviousPrice    decimal.Decimal `gorm:"type:numeric(10,2);default:0" json:"previous_price"`
-	NewPrice         decimal.Decimal `gorm:"type:numeric(10,2);default:0" json:"new_price"`
-	PreviousDiscount decimal.Decimal `gorm:"type:numeric(10,2);default:0" json:"previous_discount"`
-	NewDiscount      decimal.Decimal `gorm:"type:numeric(10,2);default:0" json:"new_discount"`
+	PreviousPrice    float64 `gorm:"type:numeric(10,2);default:0" json:"previous_price"`
+	NewPrice         float64 `gorm:"type:numeric(10,2);default:0" json:"new_price"`
+	PreviousDiscount float64 `gorm:"type:numeric(10,2);default:0" json:"previous_discount"`
+	NewDiscount      float64 `gorm:"type:numeric(10,2);default:0" json:"new_discount"`
 
 	Note string `gorm:"type:text" json:"note,omitempty"`
 

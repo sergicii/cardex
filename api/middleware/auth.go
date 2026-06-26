@@ -10,31 +10,21 @@ import (
 )
 
 const (
-	// UserIDKey es la clave usada para almacenar el userID en el contexto de Gin.
-	UserIDKey = "userID"
-	// EmailKey es la clave usada para almacenar el email en el contexto de Gin.
-	EmailKey = "email"
-	// NameKey es la clave usada para almacenar el nombre en el contexto de Gin.
-	NameKey = "name"
+	UserIDKey   = "userID"
+	EmailKey    = "email"
+	NameKey     = "name"
+	IsGuestKey  = "isGuest"
 )
 
-// AuthMiddleware valida el token JWT del header Authorization
-// e inyecta los datos del usuario en el contexto de Gin.
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "header Authorization requerido"})
+		token := extractToken(c)
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token requerido (header Authorization o cookie access_token)"})
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "formato inválido, use: Bearer <token>"})
-			return
-		}
-
-		claims, err := jwt.ValidateToken(parts[1], secret)
+		claims, err := jwt.ValidateToken(token, secret)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token inválido o expirado"})
 			return
@@ -47,24 +37,15 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 	}
 }
 
-// OptionalAuthMiddleware intenta validar el token JWT e inyectar los datos
-// del usuario en el contexto de Gin. Si el header Authorization está ausente
-// o el token es inválido, continúa sin rechazar la petición.
 func OptionalAuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		token := extractToken(c)
+		if token == "" {
 			c.Next()
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.Next()
-			return
-		}
-
-		claims, err := jwt.ValidateToken(parts[1], secret)
+		claims, err := jwt.ValidateToken(token, secret)
 		if err != nil {
 			c.Next()
 			return
@@ -77,8 +58,23 @@ func OptionalAuthMiddleware(secret string) gin.HandlerFunc {
 	}
 }
 
-// RequireStockOwnership verifica que el stock solicitado pertenece al usuario autenticado.
-// Debe usarse después de AuthMiddleware.
+func extractToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			return parts[1]
+		}
+	}
+
+	cookie, err := c.Cookie("access_token")
+	if err == nil && cookie != "" {
+		return cookie
+	}
+
+	return ""
+}
+
 func RequireStockOwnership(stockRepo stock.Repository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get(UserIDKey)

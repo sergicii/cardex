@@ -7,36 +7,33 @@ import (
 	"gorm.io/gorm"
 )
 
-// Repository define los métodos que nuestra capa de datos de usuarios debe tener.
 type Repository interface {
 	Create(user *User) error
 	FindByEmail(email string) (*User, error)
 	FindByID(id string) (*User, error)
-	FindByVerificationToken(token string) (*User, error)
 	UpdateName(id, name string) error
 	UpdatePassword(id, hashedPassword string) error
-	VerifyEmail(id string, verifiedAt time.Time) error
-	SetVerificationToken(id, token string) error
+	SetVerificationCode(id, code string, expiresAt time.Time) error
+	FindByEmailAndCode(email, code string) (*User, error)
+	CompleteRegistration(id, email, name, hashedPassword string) error
+	SetRefreshToken(id, refreshToken string) error
+	FindByRefreshToken(refreshToken string) (*User, error)
+	UpgradeGuest(id, email, name, hashedPassword string) error
+	DeleteUser(id string) error
 }
 
 type repository struct {
 	db *gorm.DB
 }
 
-// NewRepository crea una nueva instancia del repositorio de usuarios.
 func NewRepository(db *gorm.DB) Repository {
 	return &repository{db: db}
 }
 
-// Create ejecuta un INSERT INTO users con los datos del usuario ya validados.
-// El campo hashed_password debe venir pre-hasheado desde la capa de servicio.
 func (r *repository) Create(user *User) error {
 	return r.db.Create(user).Error
 }
 
-// FindByEmail busca un usuario por su dirección de correo electrónico.
-// A nivel SQL ejecuta un SELECT * FROM users WHERE email = ? LIMIT 1.
-// Devuelve un error específico si el usuario no existe.
 func (r *repository) FindByEmail(email string) (*User, error) {
 	var user User
 	result := r.db.Where("email = ?", email).First(&user)
@@ -49,7 +46,6 @@ func (r *repository) FindByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
-// FindByID busca un usuario por su ID.
 func (r *repository) FindByID(id string) (*User, error) {
 	var user User
 	result := r.db.Where("id = ?", id).First(&user)
@@ -62,20 +58,6 @@ func (r *repository) FindByID(id string) (*User, error) {
 	return &user, nil
 }
 
-// FindByVerificationToken busca un usuario por su token de verificación de email.
-func (r *repository) FindByVerificationToken(token string) (*User, error) {
-	var user User
-	result := r.db.Where("verification_token = ?", token).First(&user)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, ErrInvalidVerificationToken
-	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return &user, nil
-}
-
-// UpdateName actualiza el nombre del usuario.
 func (r *repository) UpdateName(id, name string) error {
 	result := r.db.Model(&User{}).Where("id = ?", id).Update("name", name)
 	if result.Error != nil {
@@ -87,7 +69,6 @@ func (r *repository) UpdateName(id, name string) error {
 	return nil
 }
 
-// UpdatePassword actualiza la contraseña hasheada del usuario.
 func (r *repository) UpdatePassword(id, hashedPassword string) error {
 	result := r.db.Model(&User{}).Where("id = ?", id).Update("hashed_password", hashedPassword)
 	if result.Error != nil {
@@ -99,12 +80,10 @@ func (r *repository) UpdatePassword(id, hashedPassword string) error {
 	return nil
 }
 
-// VerifyEmail marca el email del usuario como verificado.
-func (r *repository) VerifyEmail(id string, verifiedAt time.Time) error {
+func (r *repository) SetVerificationCode(id, code string, expiresAt time.Time) error {
 	result := r.db.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"email_verified":      true,
-		"verified_at":         verifiedAt,
-		"verification_token":  "",
+		"verification_code":           code,
+		"verification_code_expires_at": expiresAt,
 	})
 	if result.Error != nil {
 		return result.Error
@@ -115,14 +94,85 @@ func (r *repository) VerifyEmail(id string, verifiedAt time.Time) error {
 	return nil
 }
 
-// SetVerificationToken asigna un token de verificación al usuario.
-func (r *repository) SetVerificationToken(id, token string) error {
-	result := r.db.Model(&User{}).Where("id = ?", id).Update("verification_token", token)
+func (r *repository) FindByEmailAndCode(email, code string) (*User, error) {
+	var user User
+	result := r.db.Where("email = ? AND verification_code = ?", email, code).First(&user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, ErrInvalidVerificationCode
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
+func (r *repository) CompleteRegistration(id, email, name, hashedPassword string) error {
+	result := r.db.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"email":                        email,
+		"name":                         name,
+		"hashed_password":              hashedPassword,
+		"email_verified":               true,
+		"verification_code":            "",
+		"verification_code_expires_at": nil,
+	})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
 		return ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *repository) SetRefreshToken(id, refreshToken string) error {
+	result := r.db.Model(&User{}).Where("id = ?", id).Update("refresh_token", refreshToken)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *repository) FindByRefreshToken(refreshToken string) (*User, error) {
+	var user User
+	result := r.db.Where("refresh_token = ?", refreshToken).First(&user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, ErrRefreshTokenInvalid
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
+func (r *repository) DeleteUser(id string) error {
+	result := r.db.Where("id = ?", id).Delete(&User{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *repository) UpgradeGuest(id, email, name, hashedPassword string) error {
+	result := r.db.Model(&User{}).Where("id = ? AND is_guest = ?", id, true).Updates(map[string]interface{}{
+		"email":                        email,
+		"name":                         name,
+		"hashed_password":              hashedPassword,
+		"is_guest":                     false,
+		"email_verified":               true,
+		"verification_code":            "",
+		"verification_code_expires_at": nil,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotAGuest
 	}
 	return nil
 }

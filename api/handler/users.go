@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -10,26 +11,68 @@ import (
 	"github.com/operaodev/cardex/internal/users"
 )
 
-// AuthResponse es la respuesta pública tras registro o login.
 type AuthResponse struct {
-	User  *users.User `json:"user"`
-	Token string      `json:"token"`
+	User         *users.User `json:"user"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
 }
 
-// UsersHandler expone las funciones del servicio de usuarios a través de HTTP.
 type UsersHandler struct {
-	service     users.Service
-	jwtSecret   string
-	jwtDuration time.Duration
+	service             users.Service
+	jwtSecret           string
+	accessTokenDuration time.Duration
+	refreshTokenDuration time.Duration
 }
 
-// NewUsersHandler crea una nueva instancia del Handler inyectando el servicio.
-func NewUsersHandler(s users.Service, jwtSecret string, jwtDuration time.Duration) *UsersHandler {
-	return &UsersHandler{service: s, jwtSecret: jwtSecret, jwtDuration: jwtDuration}
+func NewUsersHandler(s users.Service, jwtSecret string, accessDuration, refreshDuration time.Duration) *UsersHandler {
+	return &UsersHandler{
+		service:              s,
+		jwtSecret:            jwtSecret,
+		accessTokenDuration:  accessDuration,
+		refreshTokenDuration: refreshDuration,
+	}
 }
 
-// Register maneja las peticiones de registro de nuevos usuarios.
-// Body JSON: { "name": "...", "email": "...", "password": "..." }
+func (h *UsersHandler) RegisterGuest(c *gin.Context) {
+	user, err := h.service.RegisterGuest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	accessToken, refreshToken, err := h.generateAndStoreTokens(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar tokens"})
+		return
+	}
+
+	h.setTokenCookies(c, accessToken, refreshToken)
+	c.JSON(http.StatusCreated, AuthResponse{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+}
+
+func (h *UsersHandler) SendCode(c *gin.Context) {
+	var input users.SendVerificationCodeInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidJSONBody})
+		return
+	}
+
+	if err := h.service.SendVerificationCode(input); err != nil {
+		if errors.Is(err, users.ErrEmailAlreadyExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "código de verificación enviado al email"})
+}
+
 func (h *UsersHandler) Register(c *gin.Context) {
 	var input users.RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -39,6 +82,14 @@ func (h *UsersHandler) Register(c *gin.Context) {
 
 	user, err := h.service.Register(input)
 	if err != nil {
+		if errors.Is(err, users.ErrInvalidVerificationCode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, users.ErrVerificationCodeExpired) {
+			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
+			return
+		}
 		if errors.Is(err, users.ErrEmailAlreadyExists) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
@@ -47,17 +98,20 @@ func (h *UsersHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := jwt.GenerateToken(user.ID, user.Email, user.Name, h.jwtSecret, h.jwtDuration)
+	accessToken, refreshToken, err := h.generateAndStoreTokens(user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar el token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar tokens"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, AuthResponse{User: user, Token: token})
+	h.setTokenCookies(c, accessToken, refreshToken)
+	c.JSON(http.StatusCreated, AuthResponse{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
-// Login maneja las peticiones de autenticación de usuarios.
-// Body JSON: { "email": "...", "password": "..." }
 func (h *UsersHandler) Login(c *gin.Context) {
 	var input users.LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -79,43 +133,104 @@ func (h *UsersHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := jwt.GenerateToken(user.ID, user.Email, user.Name, h.jwtSecret, h.jwtDuration)
+	accessToken, refreshToken, err := h.generateAndStoreTokens(user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar el token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar tokens"})
 		return
 	}
 
-	c.JSON(http.StatusOK, AuthResponse{User: user, Token: token})
+	h.setTokenCookies(c, accessToken, refreshToken)
+	c.JSON(http.StatusOK, AuthResponse{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
-// VerifyEmail maneja la verificación del correo electrónico mediante el token.
-// Query params: token
-func (h *UsersHandler) VerifyEmail(c *gin.Context) {
-	token := c.Query("token")
-	if token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Token de verificación requerido"})
+func (h *UsersHandler) RefreshToken(c *gin.Context) {
+	refreshToken := h.extractRefreshToken(c)
+	if refreshToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token requerido"})
 		return
 	}
 
-	user, err := h.service.VerifyEmail(token)
+	claims, err := jwt.ValidateRefreshToken(refreshToken, h.jwtSecret)
 	if err != nil {
-		if errors.Is(err, users.ErrInvalidVerificationToken) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token inválido o expirado"})
+		return
+	}
+
+	refreshHash := users.HashToken(refreshToken)
+	if _, err := h.service.RefreshSession(claims.UserID, refreshHash); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token inválido o revocado"})
+		return
+	}
+
+	user, err := h.service.GetByID(claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener usuario"})
+		return
+	}
+
+	newAccessToken, newRefreshToken, err := h.generateAndStoreTokens(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar tokens"})
+		return
+	}
+
+	h.setTokenCookies(c, newAccessToken, newRefreshToken)
+	c.JSON(http.StatusOK, AuthResponse{
+		User:         user,
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+	})
+}
+
+func (h *UsersHandler) UpgradeGuest(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	var input users.UpgradeGuestInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidJSONBody})
+		return
+	}
+	input.UserID = userID.(string)
+
+	user, err := h.service.UpgradeGuest(input)
+	if err != nil {
+		if errors.Is(err, users.ErrNotAGuest) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, users.ErrInvalidVerificationCode) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if errors.Is(err, users.ErrEmailAlreadyVerified) {
-			c.JSON(http.StatusOK, gin.H{"message": "El correo ya está verificado", "user": user})
+		if errors.Is(err, users.ErrVerificationCodeExpired) {
+			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al verificar el correo"})
+		if errors.Is(err, users.ErrEmailAlreadyExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Correo verificado exitosamente", "user": user})
+	accessToken, refreshToken, err := h.generateAndStoreTokens(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al generar tokens"})
+		return
+	}
+
+	h.setTokenCookies(c, accessToken, refreshToken)
+	c.JSON(http.StatusOK, AuthResponse{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
-// GetMe devuelve el perfil del usuario autenticado.
-// GET /users/me
 func (h *UsersHandler) GetMe(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	user, err := h.service.GetByID(userID.(string))
@@ -125,3 +240,50 @@ func (h *UsersHandler) GetMe(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, user)
 }
+
+func (h *UsersHandler) generateAndStoreTokens(user *users.User) (string, string, error) {
+	accessToken, err := jwt.GenerateToken(user.ID, user.Email, user.Name, h.jwtSecret, h.accessTokenDuration)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken, err := jwt.GenerateRefreshToken(user.ID, h.jwtSecret, h.refreshTokenDuration)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshHash := users.HashToken(refreshToken)
+	if err := h.service.StoreRefreshToken(user.ID, refreshHash); err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshToken, nil
+}
+
+func (h *UsersHandler) setTokenCookies(c *gin.Context, accessToken, refreshToken string) {
+	maxAgeAccess := int(h.accessTokenDuration.Seconds())
+	maxAgeRefresh := int(h.refreshTokenDuration.Seconds())
+
+	c.SetCookie("access_token", accessToken, maxAgeAccess, "/", "", false, true)
+	c.SetCookie("refresh_token", refreshToken, maxAgeRefresh, "/", "", false, true)
+}
+
+func (h *UsersHandler) extractRefreshToken(c *gin.Context) string {
+	cookie, err := c.Cookie("refresh_token")
+	if err == nil && cookie != "" {
+		return cookie
+	}
+
+	bodyBytes, _ := c.GetRawData()
+	if len(bodyBytes) > 0 {
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		json.Unmarshal(bodyBytes, &body)
+		return body.RefreshToken
+	}
+
+	return ""
+}
+
+

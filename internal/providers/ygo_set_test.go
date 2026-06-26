@@ -350,9 +350,6 @@ func TestSetInfoToProducts_NoQuantity(t *testing.T) {
 		if p.QuantityPerSet != 0 {
 			t.Errorf("set product QuantityPerSet should be 0, got %d", p.QuantityPerSet)
 		}
-		if p.QuantityPerBox != 0 {
-			t.Errorf("set product QuantityPerBox should be 0, got %d", p.QuantityPerBox)
-		}
 	}
 }
 
@@ -713,5 +710,79 @@ func TestParseSetPage_MaidenOfWhiteFR(t *testing.T) {
 	}
 	if productsList[2].QuantityPerSet != 1 {
 		t.Errorf("Ultra Rare: got %d, want 1", productsList[2].QuantityPerSet)
+	}
+}
+
+func TestDeriveSetImageLarge(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "yugipedia thumb URL",
+			input:    "//ms.yugipedia.com/thumb/0/0a/SR14-DeckEN.png/113px-SR14-DeckEN.png",
+			expected: "//ms.yugipedia.com/0/0a/SR14-DeckEN.png",
+		},
+		{
+			name:     "yugipedia URL without thumb",
+			input:    "//ms.yugipedia.com/0/0a/SR14-DeckEN.png",
+			expected: "//ms.yugipedia.com/0/0a/SR14-DeckEN.png",
+		},
+		{
+			name:     "non-yugipedia URL with thumb",
+			input:    "https://example.com/thumb/image.png",
+			expected: "https://example.com/image.png",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deriveSetImageLarge(tt.input)
+			if got != tt.expected {
+				t.Errorf("got %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDeriveSetImageSmall(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "yugipedia URL with pixel size",
+			input:    "//ms.yugipedia.com/thumb/0/0a/SR14-DeckEN.png/113px-SR14-DeckEN.png",
+			expected: "//ms.yugipedia.com/thumb/0/0a/SR14-DeckEN.png/257px-SR14-DeckEN.png",
+		},
+		{
+			name:     "yugipedia URL without pixel size",
+			input:    "//ms.yugipedia.com/0/0a/SR14-DeckEN.png",
+			expected: "//ms.yugipedia.com/0/0a/SR14-DeckEN.png",
+		},
+		{
+			name:     "non-yugipedia URL",
+			input:    "https://example.com/113px-image.png",
+			expected: "https://example.com/257px-image.png",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deriveSetImageSmall(tt.input)
+			if got != tt.expected {
+				t.Errorf("got %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }

@@ -4,18 +4,17 @@ import (
 	"fmt"
 
 	"github.com/operaodev/cardex/internal/products"
-	"github.com/shopspring/decimal"
 )
 
 type CreateInput struct {
-	UserID     string          `json:"user_id"`
-	ProductID  uint64          `json:"product_id"`
-	Condition  Condition       `json:"condition"`
-	Quantity   int             `json:"quantity"`
-	Price      decimal.Decimal `json:"price"`
-	IsForSale  bool            `json:"is_for_sale"`
-	IsForTrade bool            `json:"is_for_trade"`
-	Note       string          `json:"note,omitempty"`
+	UserID     string    `json:"user_id"`
+	ProductID  uint64    `json:"product_id"`
+	Condition  Condition `json:"condition"`
+	Quantity   int       `json:"quantity"`
+	Price      float64   `json:"price"`
+	IsForSale  bool      `json:"is_for_sale"`
+	IsForTrade bool      `json:"is_for_trade"`
+	Note       string    `json:"note,omitempty"`
 }
 
 type QuantityInput struct {
@@ -43,10 +42,10 @@ type RollbackInput struct {
 }
 
 type PriceInput struct {
-	StockID       uint64          `json:"stock_id"`
-	Price         decimal.Decimal `json:"price"`
-	DiscountPrice decimal.Decimal `json:"discount_price,omitempty"`
-	Note          string          `json:"note,omitempty"`
+	StockID       uint64  `json:"stock_id"`
+	Price         float64 `json:"price"`
+	DiscountPrice float64 `json:"discount_price,omitempty"`
+	Note          string  `json:"note,omitempty"`
 }
 
 type OpenBoxItem struct {
@@ -387,7 +386,7 @@ func (s *service) UpdatePrice(input PriceInput) (*Stock, error) {
 		return nil, err
 	}
 
-	if input.Price.IsPositive() && !input.Price.Equal(previousPrice) {
+	if input.Price > 0 && input.Price != previousPrice {
 		log := &Log{
 			StockID:       input.StockID,
 			LogType:       LogPriceChange,
@@ -400,7 +399,7 @@ func (s *service) UpdatePrice(input PriceInput) (*Stock, error) {
 		}
 	}
 
-	if !input.DiscountPrice.Equal(previousDiscount) {
+	if input.DiscountPrice != previousDiscount {
 		log := &Log{
 			StockID:          input.StockID,
 			LogType:          LogDiscountChange,
