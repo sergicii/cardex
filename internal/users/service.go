@@ -15,10 +15,11 @@ import (
 )
 
 type RegisterInput struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Code     string `json:"code"`
+	Name        string  `json:"name"`
+	Email       string  `json:"email"`
+	Password    string  `json:"password"`
+	Code        string  `json:"code"`
+	PhoneNumber *string `json:"phone_number,omitempty"`
 }
 
 type LoginInput struct {
@@ -42,11 +43,12 @@ type SendVerificationCodeInput struct {
 }
 
 type UpgradeGuestInput struct {
-	UserID   string `json:"-"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-	Code     string `json:"code"`
+	UserID      string  `json:"-"`
+	Email       string  `json:"email"`
+	Name        string  `json:"name"`
+	Password    string  `json:"password"`
+	Code        string  `json:"code"`
+	PhoneNumber *string `json:"phone_number,omitempty"`
 }
 
 type Service interface {
@@ -118,9 +120,9 @@ func (s *service) SendVerificationCode(input SendVerificationCodeInput) error {
 	} else {
 		expiresAt := time.Now().UTC().Add(5 * time.Minute)
 		user := &User{
-			ID:                       uuid.NewString(),
-			Email:                    input.Email,
-			VerificationCode:         code,
+			ID:                        uuid.NewString(),
+			Email:                     input.Email,
+			VerificationCode:          code,
 			VerificationCodeExpiresAt: &expiresAt,
 		}
 		if err := s.repo.Create(user); err != nil {
@@ -174,7 +176,7 @@ func (s *service) Register(input RegisterInput) (*User, error) {
 		return nil, fmt.Errorf("error al procesar la contraseña: %w", err)
 	}
 
-	if err := s.repo.CompleteRegistration(user.ID, user.Email, input.Name, string(hashed)); err != nil {
+	if err := s.repo.CompleteRegistration(user.ID, user.Email, input.Name, string(hashed), input.PhoneNumber); err != nil {
 		return nil, fmt.Errorf("error al completar registro: %w", err)
 	}
 
@@ -269,7 +271,7 @@ func (s *service) UpgradeGuest(input UpgradeGuestInput) (*User, error) {
 		return nil, fmt.Errorf("error al eliminar pre-registro: %w", err)
 	}
 
-	if err := s.repo.UpgradeGuest(input.UserID, input.Email, input.Name, string(hashed)); err != nil {
+	if err := s.repo.UpgradeGuest(input.UserID, input.Email, input.Name, string(hashed), input.PhoneNumber); err != nil {
 		return nil, err
 	}
 

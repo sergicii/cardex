@@ -134,10 +134,12 @@ func (s *Server) setupRoutes() {
 	stockGroup := s.router.Group("/stock")
 	ownership := middleware.RequireStockOwnership(s.stockRepo)
 	{
-		// GET /stock/me — stock del usuario autenticado
-		stockGroup.GET("/me", auth, s.stockHandler.GetMyStock)
-		// GET /stock/:user_id
-		stockGroup.GET("/:user_id", auth, s.stockHandler.GetByUserID)
+		// POST /stock/me — stock paginado del usuario autenticado
+		stockGroup.POST("/me", auth, s.stockHandler.GetMyStock)
+		// POST /stock/me/filters — filtros únicos del stock del usuario autenticado
+		stockGroup.POST("/me/filters", auth, s.stockHandler.GetMyStockFilters)
+		// POST /stock/user/:user_id — stock paginado de otro usuario
+		stockGroup.POST("/user/:user_id", auth, s.stockHandler.GetByUserID)
 		// GET /stock/id/:id — requiere ownership
 		stockGroup.GET("/id/:id", auth, ownership, s.stockHandler.GetByID)
 		// GET /stock/logs/:stock_id — requiere ownership
@@ -188,10 +190,12 @@ func (s *Server) setupRoutes() {
 	{
 		// GET /wishlist
 		wishlistGroup.GET("", auth, s.wishlistHandler.GetMyWishlist)
+		// GET /wishlist/check/:product_id
+		wishlistGroup.GET("/check/:product_id", auth, s.wishlistHandler.CheckInWishlist)
 		// POST /wishlist
 		wishlistGroup.POST("", auth, s.wishlistHandler.Upsert)
-		// DELETE /wishlist/:product_id
-		wishlistGroup.DELETE("/:product_id", auth, s.wishlistHandler.Delete)
+		// DELETE /wishlist/:wishlist_id
+		wishlistGroup.DELETE("/:wishlist_id", auth, s.wishlistHandler.Delete)
 	}
 }
 

@@ -6,60 +6,6 @@ import (
 	"github.com/operaodev/cardex/internal/products"
 )
 
-type CreateInput struct {
-	UserID     string    `json:"user_id"`
-	ProductID  uint64    `json:"product_id"`
-	Condition  Condition `json:"condition"`
-	Quantity   int       `json:"quantity"`
-	Price      float64   `json:"price"`
-	IsForSale  bool      `json:"is_for_sale"`
-	IsForTrade bool      `json:"is_for_trade"`
-	Note       string    `json:"note,omitempty"`
-}
-
-type QuantityInput struct {
-	StockID uint64 `json:"stock_id"`
-	Amount  int    `json:"amount"`
-	Note    string `json:"note,omitempty"`
-}
-
-type DecreaseInput struct {
-	StockID uint64 `json:"stock_id"`
-	Amount  int    `json:"amount"`
-	Note    string `json:"note,omitempty"`
-}
-
-type AdjustmentInput struct {
-	StockID     uint64 `json:"stock_id"`
-	NewQuantity int    `json:"new_quantity"`
-	Note        string `json:"note,omitempty"`
-}
-
-type RollbackInput struct {
-	StockID uint64 `json:"stock_id"`
-	LogID   uint64 `json:"log_id"`
-	Note    string `json:"note,omitempty"`
-}
-
-type PriceInput struct {
-	StockID       uint64  `json:"stock_id"`
-	Price         float64 `json:"price"`
-	DiscountPrice float64 `json:"discount_price,omitempty"`
-	Note          string  `json:"note,omitempty"`
-}
-
-type OpenBoxItem struct {
-	Product  products.Product `json:"product"`
-	Quantity int              `json:"quantity"`
-}
-
-type OpenBoxInput struct {
-	StockID  uint64        `json:"stock_id"`
-	Quantity int           `json:"quantity"`
-	Items    []OpenBoxItem `json:"items"`
-	Note     string        `json:"note,omitempty"`
-}
-
 type Service interface {
 	Create(input CreateInput) (*Stock, error)
 	Restock(input QuantityInput) (*Stock, error)
@@ -71,7 +17,8 @@ type Service interface {
 	Damage(input DecreaseInput) (*Stock, error)
 	Adjust(input AdjustmentInput) (*Stock, error)
 	Rollback(input RollbackInput) (*Stock, error)
-	GetStockByUserID(userID string) ([]Stock, error)
+	GetStockByUserID(userID string, input FilterInput) (StockPage, error)
+	GetMyStockFilters(userID string, input FilterInput) (FilterOutput, error)
 	UpdatePrice(input PriceInput) (*Stock, error)
 	ToggleForSale(stockID uint64, isForSale bool) (*Stock, error)
 	ToggleForTrade(stockID uint64, isForTrade bool) (*Stock, error)
@@ -256,8 +203,12 @@ func (s *service) Rollback(input RollbackInput) (*Stock, error) {
 	return s.repo.FindByID(stock.ID)
 }
 
-func (s *service) GetStockByUserID(userID string) ([]Stock, error) {
-	return s.repo.GetByUserID(userID)
+func (s *service) GetStockByUserID(userID string, input FilterInput) (StockPage, error) {
+	return s.repo.GetByUserID(userID, input)
+}
+
+func (s *service) GetMyStockFilters(userID string, input FilterInput) (FilterOutput, error) {
+	return s.repo.GetFiltersByUserID(userID, input)
 }
 
 func (s *service) GetStockByID(id uint64) (*Stock, error) {

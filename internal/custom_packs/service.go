@@ -5,8 +5,9 @@ import "fmt"
 // Service define el contrato de operaciones de negocio para wishlist.
 type Service interface {
 	Upsert(userID string, productID uint64, delta int) (*Wishlist, error)
-	Delete(userID string, productID uint64) error
+	Delete(userID string, wishlistID uint64) error
 	GetByUserID(userID string) ([]Wishlist, error)
+	IsInWishlist(userID string, productID uint64) (wishlistID uint64, found bool, err error)
 }
 
 type service struct {
@@ -30,14 +31,14 @@ func (s *service) Upsert(userID string, productID uint64, delta int) (*Wishlist,
 	return s.repo.Upsert(userID, productID, delta)
 }
 
-func (s *service) Delete(userID string, productID uint64) error {
+func (s *service) Delete(userID string, wishlistID uint64) error {
 	if userID == "" {
 		return fmt.Errorf("userID requerido")
 	}
-	if productID == 0 {
-		return fmt.Errorf("productID requerido")
+	if wishlistID == 0 {
+		return fmt.Errorf("wishlistID requerido")
 	}
-	return s.repo.Delete(userID, productID)
+	return s.repo.Delete(userID, wishlistID)
 }
 
 func (s *service) GetByUserID(userID string) ([]Wishlist, error) {
@@ -45,4 +46,14 @@ func (s *service) GetByUserID(userID string) ([]Wishlist, error) {
 		return nil, fmt.Errorf("userID requerido")
 	}
 	return s.repo.GetByUserID(userID)
+}
+
+func (s *service) IsInWishlist(userID string, productID uint64) (uint64, bool, error) {
+	if userID == "" {
+		return 0, false, fmt.Errorf("userID requerido")
+	}
+	if productID == 0 {
+		return 0, false, fmt.Errorf("productID requerido")
+	}
+	return s.repo.IsInWishlist(userID, productID)
 }

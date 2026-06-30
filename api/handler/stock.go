@@ -200,20 +200,48 @@ func (h *StockHandler) Rollback(c *gin.Context) {
 	c.JSON(http.StatusOK, s)
 }
 
-// GetMyStock obtiene el stock del usuario autenticado.
-// GET /stock/me
+// GetMyStock obtiene el stock paginado del usuario autenticado.
+// POST /stock/me
 func (h *StockHandler) GetMyStock(c *gin.Context) {
 	userID, _ := c.Get("userID")
-	stocks, err := h.service.GetStockByUserID(userID.(string))
+
+	var input stock.FilterInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la petición inválido"})
+		return
+	}
+
+	page, err := h.service.GetStockByUserID(userID.(string), input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, stocks)
+	c.JSON(http.StatusOK, page)
 }
 
-// GetByUserID obtiene todo el stock de un usuario.
-// GET /stock/:user_id
+// GetMyStockFilters retorna valores únicos del stock del usuario para construir filtros.
+// POST /stock/me/filters
+func (h *StockHandler) GetMyStockFilters(c *gin.Context) {
+	userID, _ := c.Get("userID")
+
+	var input stock.FilterInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la petición inválido"})
+		return
+	}
+
+	out, err := h.service.GetMyStockFilters(userID.(string), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
+
+// GetByUserID obtiene el stock paginado de un usuario por su ID.
+// POST /stock/user/:user_id
 func (h *StockHandler) GetByUserID(c *gin.Context) {
 	userID := c.Param("user_id")
 	if userID == "" {
@@ -221,13 +249,19 @@ func (h *StockHandler) GetByUserID(c *gin.Context) {
 		return
 	}
 
-	stocks, err := h.service.GetStockByUserID(userID)
+	var input stock.FilterInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la petición inválido"})
+		return
+	}
+
+	page, err := h.service.GetStockByUserID(userID, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, stocks)
+	c.JSON(http.StatusOK, page)
 }
 
 // GetByID obtiene un stock por su ID.

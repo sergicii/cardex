@@ -25,14 +25,16 @@ func (r *repository) GetPrices(id uint64) (MarketAnalysis, error) {
 	var analysis MarketAnalysis
 
 	result := r.db.Table("stocks").
+		Joins("JOIN users ON users.id = stocks.user_id").
 		Select(`
-			COALESCE(MIN(price), 0) AS low_price,
-			COALESCE(AVG(price), 0) AS average_price,
-			COALESCE(MAX(price), 0) AS high_price,
-			COALESCE(SUM(quantity), 0) AS market_stocks
+			COALESCE(MIN(stocks.price), 0) AS low_price,
+			COALESCE(AVG(stocks.price), 0) AS average_price,
+			COALESCE(MAX(stocks.price), 0) AS high_price,
+			COALESCE(SUM(stocks.quantity), 0) AS market_stocks
 		`).
-		Where("product_id = ?", id).
-		Where("is_for_sale = ?", true).
+		Where("stocks.product_id = ?", id).
+		Where("stocks.is_for_sale = ?", true).
+		Where("users.is_guest = ?", false).
 		Scan(&analysis)
 
 	if result.Error != nil {
@@ -60,16 +62,18 @@ func (r *repository) GetOffers(input OffersInput) (OffersPage, error) {
 
 	// Count total
 	query := r.db.Table("stocks").
-		Where("product_id = ?", input.ProductID).
-		Where("is_for_sale = ? OR is_for_trade = ?", true, true)
+		Joins("JOIN users ON users.id = stocks.user_id").
+		Where("users.is_guest = ?", false).
+		Where("stocks.product_id = ?", input.ProductID).
+		Where("stocks.is_for_sale = ? OR stocks.is_for_trade = ?", true, true)
 	if input.ForSale != nil {
-		query = query.Where("is_for_sale = ?", *input.ForSale)
+		query = query.Where("stocks.is_for_sale = ?", *input.ForSale)
 	}
 	if input.ForTrade != nil {
-		query = query.Where("is_for_trade = ?", *input.ForTrade)
+		query = query.Where("stocks.is_for_trade = ?", *input.ForTrade)
 	}
 	if input.HasStock != nil && *input.HasStock {
-		query = query.Where("quantity > 0")
+		query = query.Where("stocks.quantity > 0")
 	}
 
 	query.Count(&page.Total)
@@ -83,19 +87,21 @@ func (r *repository) GetOffers(input OffersInput) (OffersPage, error) {
 
 	findQuery := r.db.Preload("User").
 		Table("stocks").
-		Where("product_id = ?", input.ProductID).
-		Where("is_for_sale = ? OR is_for_trade = ?", true, true)
+		Joins("JOIN users ON users.id = stocks.user_id").
+		Where("users.is_guest = ?", false).
+		Where("stocks.product_id = ?", input.ProductID).
+		Where("stocks.is_for_sale = ? OR stocks.is_for_trade = ?", true, true)
 	if input.ForSale != nil {
-		findQuery = findQuery.Where("is_for_sale = ?", *input.ForSale)
+		findQuery = findQuery.Where("stocks.is_for_sale = ?", *input.ForSale)
 	}
 	if input.ForTrade != nil {
-		findQuery = findQuery.Where("is_for_trade = ?", *input.ForTrade)
+		findQuery = findQuery.Where("stocks.is_for_trade = ?", *input.ForTrade)
 	}
 	if input.HasStock != nil {
 		if *input.HasStock {
-			findQuery = findQuery.Where("quantity > 0")
+			findQuery = findQuery.Where("stocks.quantity > 0")
 		} else {
-			findQuery = findQuery.Where("quantity <= 0")
+			findQuery = findQuery.Where("stocks.quantity <= 0")
 		}
 	}
 
@@ -154,8 +160,8 @@ func (r *repository) GetCards(input FilterInput) (ProductResumePage, error) {
 		q := r.db.Table("products AS p").
 			Joins("LEFT JOIN (?) AS st ON st.product_id = p.id", stockSubquery)
 
-		q = q.Where("(p.name ILIKE ? OR p.code ILIKE ? OR p.archetype ILIKE ?)",
-			namePattern, otherPattern, otherPattern)
+		q = q.Where("(p.set_external_id ILIKE ? OR p.name ILIKE ? OR p.code ILIKE ? OR p.archetype ILIKE ?)",
+			namePattern, namePattern, otherPattern, otherPattern)
 
 		if input.ProductType != "" {
 			q = q.Where("p.type = ?", input.ProductType)

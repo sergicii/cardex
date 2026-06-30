@@ -15,10 +15,10 @@ type Repository interface {
 	UpdatePassword(id, hashedPassword string) error
 	SetVerificationCode(id, code string, expiresAt time.Time) error
 	FindByEmailAndCode(email, code string) (*User, error)
-	CompleteRegistration(id, email, name, hashedPassword string) error
+	CompleteRegistration(id, email, name, hashedPassword string, phoneNumber *string) error
 	SetRefreshToken(id, refreshToken string) error
 	FindByRefreshToken(refreshToken string) (*User, error)
-	UpgradeGuest(id, email, name, hashedPassword string) error
+	UpgradeGuest(id, email, name, hashedPassword string, phoneNumber *string) error
 	DeleteUser(id string) error
 }
 
@@ -82,7 +82,7 @@ func (r *repository) UpdatePassword(id, hashedPassword string) error {
 
 func (r *repository) SetVerificationCode(id, code string, expiresAt time.Time) error {
 	result := r.db.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"verification_code":           code,
+		"verification_code":            code,
 		"verification_code_expires_at": expiresAt,
 	})
 	if result.Error != nil {
@@ -106,15 +106,19 @@ func (r *repository) FindByEmailAndCode(email, code string) (*User, error) {
 	return &user, nil
 }
 
-func (r *repository) CompleteRegistration(id, email, name, hashedPassword string) error {
-	result := r.db.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+func (r *repository) CompleteRegistration(id, email, name, hashedPassword string, phoneNumber *string) error {
+	updates := map[string]interface{}{
 		"email":                        email,
 		"name":                         name,
 		"hashed_password":              hashedPassword,
 		"email_verified":               true,
 		"verification_code":            "",
 		"verification_code_expires_at": nil,
-	})
+	}
+	if phoneNumber != nil {
+		updates["phone_number"] = *phoneNumber
+	}
+	result := r.db.Model(&User{}).Where("id = ?", id).Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -158,8 +162,8 @@ func (r *repository) DeleteUser(id string) error {
 	return nil
 }
 
-func (r *repository) UpgradeGuest(id, email, name, hashedPassword string) error {
-	result := r.db.Model(&User{}).Where("id = ? AND is_guest = ?", id, true).Updates(map[string]interface{}{
+func (r *repository) UpgradeGuest(id, email, name, hashedPassword string, phoneNumber *string) error {
+	updates := map[string]interface{}{
 		"email":                        email,
 		"name":                         name,
 		"hashed_password":              hashedPassword,
@@ -167,7 +171,11 @@ func (r *repository) UpgradeGuest(id, email, name, hashedPassword string) error 
 		"email_verified":               true,
 		"verification_code":            "",
 		"verification_code_expires_at": nil,
-	})
+	}
+	if phoneNumber != nil {
+		updates["phone_number"] = *phoneNumber
+	}
+	result := r.db.Model(&User{}).Where("id = ? AND is_guest = ?", id, true).Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}

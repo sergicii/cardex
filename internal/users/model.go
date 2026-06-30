@@ -9,6 +9,7 @@ type User struct {
 	Email                     string     `json:"email" gorm:"uniqueIndex:uni_users_email,where:email <> ''"`
 	HashedPassword            string     `json:"-"`
 	Name                      string     `json:"name"`
+	PhoneNumber               *string    `json:"phone_number,omitempty" gorm:"uniqueIndex:uni_users_phone,where:phone_number IS NOT NULL;type:varchar(20)"`
 	IsGuest                   bool       `json:"is_guest" gorm:"default:false;not null"`
 	EmailVerified             bool       `json:"email_verified" gorm:"default:false;not null"`
 	VerificationCode          string     `json:"-" gorm:"type:varchar(6)"`
