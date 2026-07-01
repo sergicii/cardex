@@ -42,6 +42,8 @@ func Connect() {
 		&stock.Stock{},
 		&stock.Log{},
 		&custompacks.Wishlist{},
+		&custompacks.Bundle{},
+		&custompacks.BundleItem{},
 	); err != nil {
 		log.Fatalf("Error en automigración: %v", err)
 	}

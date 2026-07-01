@@ -13,6 +13,10 @@ type Repository interface {
 	Delete(userID string, wishlistID uint64) error
 	GetByUserID(userID string) ([]Wishlist, error)
 	IsInWishlist(userID string, productID uint64) (wishlistID uint64, found bool, err error)
+	CreateBundle(userID string, items []BundleItem) (*Bundle, error)
+	UpdateBundle(userID string, bundleID uint64, items []BundleItem) (*Bundle, error)
+	DeleteBundle(userID string, bundleID uint64) error
+	GetBundlesByUserID(userID string) ([]Bundle, error)
 }
 
 type repository struct {
@@ -119,4 +123,131 @@ func (r *repository) IsInWishlist(userID string, productID uint64) (uint64, bool
 		return 0, false, err
 	}
 	return wish.ID, true, nil
+}
+
+// CreateBundle crea un nuevo bundle con sus items asociados.
+func (r *repository) CreateBundle(userID string, items []BundleItem) (*Bundle, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID no puede estar vacío")
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("el bundle debe contener al menos un ítem")
+	}
+
+	bundle := &Bundle{
+		UserID: userID,
+	}
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(bundle).Error; err != nil {
+			return err
+		}
+
+		for i := range items {
+			items[i].BundleID = bundle.ID
+		}
+
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+
+		bundle.Items = items
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result Bundle
+	if err := r.db.Preload("Items").First(&result, bundle.ID).Error; err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// UpdateBundle edita un bundle existente reemplazando sus items asociados.
+func (r *repository) UpdateBundle(userID string, bundleID uint64, items []BundleItem) (*Bundle, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID no puede estar vacío")
+	}
+	if bundleID == 0 {
+		return nil, fmt.Errorf("bundleID no puede ser 0")
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("el bundle debe contener al menos un ítem")
+	}
+
+	var bundle Bundle
+	if err := r.db.Where("id = ? AND user_id = ?", bundleID, userID).First(&bundle).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("bundle no encontrado")
+		}
+		return nil, err
+	}
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("bundle_id = ?", bundleID).Delete(&BundleItem{}).Error; err != nil {
+			return err
+		}
+
+		for i := range items {
+			items[i].BundleID = bundleID
+			items[i].ID = 0
+		}
+
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result Bundle
+	if err := r.db.Preload("Items").First(&result, bundleID).Error; err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// DeleteBundle elimina un bundle y sus items asociados.
+func (r *repository) DeleteBundle(userID string, bundleID uint64) error {
+	if userID == "" {
+		return fmt.Errorf("userID no puede estar vacío")
+	}
+	if bundleID == 0 {
+		return fmt.Errorf("bundleID no puede ser 0")
+	}
+
+	result := r.db.
+		Where("id = ? AND user_id = ?", bundleID, userID).
+		Delete(&Bundle{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("bundle no encontrado")
+	}
+	return nil
+}
+
+// GetBundlesByUserID obtiene todos los bundles de un usuario con sus items y stock pre-cargados.
+func (r *repository) GetBundlesByUserID(userID string) ([]Bundle, error) {
+	var bundles []Bundle
+	result := r.db.
+		Preload("Items.Stock.Product").
+		Where("user_id = ?", userID).
+		Find(&bundles)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return bundles, nil
 }

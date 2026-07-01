@@ -113,6 +113,10 @@ func (r *repository) GetOffers(input OffersInput) (OffersPage, error) {
 
 	offers := make([]Offer, 0, len(stocks))
 	for _, s := range stocks {
+		var discount float64 = 0
+		if s.Price > 0 {
+			discount = ((s.Price - s.DiscountPrice) / s.Price) * 100
+		}
 		offers = append(offers, Offer{
 			User:          s.User,
 			StockID:       s.ID,
@@ -120,7 +124,7 @@ func (r *repository) GetOffers(input OffersInput) (OffersPage, error) {
 			IsForTrade:    s.IsForTrade,
 			Price:         float64(s.Price),
 			DiscountPrice: float64(s.DiscountPrice),
-			Discount:      float64((s.Price - s.DiscountPrice) / s.Price * 100),
+			Discount:      discount,
 			Quantity:      uint(s.Quantity),
 		})
 	}

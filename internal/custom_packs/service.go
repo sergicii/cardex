@@ -8,6 +8,10 @@ type Service interface {
 	Delete(userID string, wishlistID uint64) error
 	GetByUserID(userID string) ([]Wishlist, error)
 	IsInWishlist(userID string, productID uint64) (wishlistID uint64, found bool, err error)
+	CreateBundle(userID string, items []BundleItem) (*Bundle, error)
+	UpdateBundle(userID string, bundleID uint64, items []BundleItem) (*Bundle, error)
+	DeleteBundle(userID string, bundleID uint64) error
+	GetBundlesByUserID(userID string) ([]Bundle, error)
 }
 
 type service struct {
@@ -56,4 +60,44 @@ func (s *service) IsInWishlist(userID string, productID uint64) (uint64, bool, e
 		return 0, false, fmt.Errorf("productID requerido")
 	}
 	return s.repo.IsInWishlist(userID, productID)
+}
+
+func (s *service) CreateBundle(userID string, items []BundleItem) (*Bundle, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID requerido")
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("el bundle debe contener al menos un ítem")
+	}
+	return s.repo.CreateBundle(userID, items)
+}
+
+func (s *service) UpdateBundle(userID string, bundleID uint64, items []BundleItem) (*Bundle, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID requerido")
+	}
+	if bundleID == 0 {
+		return nil, fmt.Errorf("bundleID requerido")
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("el bundle debe contener al menos un ítem")
+	}
+	return s.repo.UpdateBundle(userID, bundleID, items)
+}
+
+func (s *service) DeleteBundle(userID string, bundleID uint64) error {
+	if userID == "" {
+		return fmt.Errorf("userID requerido")
+	}
+	if bundleID == 0 {
+		return fmt.Errorf("bundleID requerido")
+	}
+	return s.repo.DeleteBundle(userID, bundleID)
+}
+
+func (s *service) GetBundlesByUserID(userID string) ([]Bundle, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID requerido")
+	}
+	return s.repo.GetBundlesByUserID(userID)
 }

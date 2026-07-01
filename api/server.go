@@ -197,6 +197,19 @@ func (s *Server) setupRoutes() {
 		// DELETE /wishlist/:wishlist_id
 		wishlistGroup.DELETE("/:wishlist_id", auth, s.wishlistHandler.Delete)
 	}
+
+	// Bundles
+	bundlesGroup := s.router.Group("/bundles")
+	{
+		// GET /bundles
+		bundlesGroup.GET("", auth, s.wishlistHandler.GetMyBundles)
+		// POST /bundles
+		bundlesGroup.POST("", auth, s.wishlistHandler.CreateBundle)
+		// PUT /bundles/:bundle_id
+		bundlesGroup.PUT("/:bundle_id", auth, s.wishlistHandler.UpdateBundle)
+		// DELETE /bundles/:bundle_id
+		bundlesGroup.DELETE("/:bundle_id", auth, s.wishlistHandler.DeleteBundle)
+	}
 }
 
 func (s *Server) Start(addr string) error {

@@ -95,3 +95,80 @@ func (h *WishlistHandler) CheckInWishlist(c *gin.Context) {
 		"wishlist_id": wishlistID,
 	})
 }
+
+// GetMyBundles obtiene los bundles del usuario autenticado.
+// GET /bundles
+func (h *WishlistHandler) GetMyBundles(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	bundles, err := h.service.GetBundlesByUserID(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, bundles)
+}
+
+// CreateBundle crea un nuevo bundle para el usuario autenticado.
+// POST /bundles
+func (h *WishlistHandler) CreateBundle(c *gin.Context) {
+	var req struct {
+		Items []custompacks.BundleItem `json:"items" binding:"required,gt=0"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": ErrInvalidJSONBody})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+	bundle, err := h.service.CreateBundle(userID.(string), req.Items)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, bundle)
+}
+
+// UpdateBundle edita un bundle existente para el usuario autenticado.
+// PUT /bundles/:bundle_id
+func (h *WishlistHandler) UpdateBundle(c *gin.Context) {
+	bundleIDStr := c.Param("bundle_id")
+	bundleID, err := strconv.ParseUint(bundleIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "bundle_id inválido"})
+		return
+	}
+
+	var req struct {
+		Items []custompacks.BundleItem `json:"items" binding:"required,gt=0"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": ErrInvalidJSONBody})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+	bundle, err := h.service.UpdateBundle(userID.(string), bundleID, req.Items)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, bundle)
+}
+
+// DeleteBundle elimina un bundle para el usuario autenticado.
+// DELETE /bundles/:bundle_id
+func (h *WishlistHandler) DeleteBundle(c *gin.Context) {
+	bundleIDStr := c.Param("bundle_id")
+	bundleID, err := strconv.ParseUint(bundleIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "bundle_id inválido"})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+	if err := h.service.DeleteBundle(userID.(string), bundleID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "bundle eliminado"})
+}
