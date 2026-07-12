@@ -136,7 +136,7 @@ func (r *repository) GetSuggestions(input SuggestionInput) ([]SuggestionDTO, err
 			OR archetype ILIKE ?
 			OR external_id ILIKE ?
 		)`, namePattern, otherPattern, otherPattern, otherPattern).
-		Order("wanted DESC, priority ASC").
+		Order("(wanted + 0) DESC, priority ASC").
 		Limit(20).
 		Find(&suggestions).Error
 
@@ -240,7 +240,7 @@ func (r *repository) GetSuggestionsByUser(userID string, input SuggestionInput) 
 			OR p.external_id ILIKE ?
 		)`, namePattern, otherPattern, otherPattern, otherPattern).
 		Group("p.id").
-		Order("p.wanted DESC, priority ASC").
+		Order("(p.wanted + 0) DESC, priority ASC").
 		Limit(10).
 		Find(&suggestions).Error
 

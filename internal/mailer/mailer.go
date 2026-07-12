@@ -47,3 +47,4 @@ Equipo Cardex`, code)
 
 	return smtp.SendMail(addr, auth, m.from, []string{to}, []byte(msg))
 }
+	

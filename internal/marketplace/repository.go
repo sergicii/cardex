@@ -152,17 +152,11 @@ func (r *repository) GetCards(input FilterInput) (ProductResumePage, error) {
 
 	offset := (input.Page - 1) * input.Limit
 
-	stockSubquery := r.db.Table("stocks").
-		Select("product_id, COALESCE(SUM(quantity), 0) AS global_stock, COALESCE(AVG(price), 0) AS average_price").
-		Where("is_for_sale = ?", true).
-		Group("product_id")
-
 	namePattern := "%" + input.Input + "%"
 	otherPattern := input.Input + "%"
 
 	baseQuery := func() *gorm.DB {
-		q := r.db.Table("products AS p").
-			Joins("LEFT JOIN (?) AS st ON st.product_id = p.id", stockSubquery)
+		q := r.db.Table("products AS p")
 
 		q = q.Where("(p.set_external_id ILIKE ? OR p.name ILIKE ? OR p.code ILIKE ? OR p.archetype ILIKE ?)",
 			namePattern, namePattern, otherPattern, otherPattern)
@@ -181,28 +175,82 @@ func (r *repository) GetCards(input FilterInput) (ProductResumePage, error) {
 		return q
 	}
 
+	// ── 1. Conteo sin join de stocks ──
 	countQuery := baseQuery()
 	countQuery.Count(&page.Total)
 
-	var items []ProductResume
+	// ── 2. Página de productos sin datos de stock ──
+	type productRow struct {
+		ID         uint64
+		Name       string
+		Code       string
+		SetName    string
+		Rarity     string
+		RarityCode string
+		Image      string
+	}
+
+	var rows []productRow
 	err := baseQuery().
 		Select(`p.id, p.name, COALESCE(p.code, '') AS code, p.set_name,
 			p.rarity, p.rarity_code,
-			COALESCE(st.global_stock, 0) AS global_stock,
-			COALESCE(st.average_price, 0) AS average_price,
-			COALESCE(
-				NULLIF(p.print_url_large, ''),
-				p.images->0->>'image_url',
-				p.set_image_large,
-				''
-			) AS image`).
-		Order("p.wanted DESC").
+			COALESCE(NULLIF(p.print_url_large, ''), p.images->0->>'image_url', p.set_image_large, '') AS image`).
+		Order("(p.wanted + 0) DESC").
 		Offset(offset).
 		Limit(input.Limit).
-		Scan(&items).Error
+		Scan(&rows).Error
 
 	if err != nil {
 		return page, err
+	}
+
+	if len(rows) == 0 {
+		page.Items = []ProductResume{}
+		page.Page = input.Page
+		page.Limit = input.Limit
+		page.TotalPages = int((page.Total + int64(input.Limit) - 1) / int64(input.Limit))
+		return page, nil
+	}
+
+	// ── 3. Stock solo para los IDs devueltos ──
+	productIDs := make([]uint64, len(rows))
+	for i, row := range rows {
+		productIDs[i] = row.ID
+	}
+
+	type stockRow struct {
+		ProductID    uint64
+		GlobalStock  int
+		AveragePrice float64
+	}
+
+	var stockRows []stockRow
+	r.db.Table("stocks").
+		Select("product_id, COALESCE(SUM(quantity), 0) AS global_stock, COALESCE(AVG(price), 0) AS average_price").
+		Where("product_id IN ? AND is_for_sale = ?", productIDs, true).
+		Group("product_id").
+		Scan(&stockRows)
+
+	stockMap := make(map[uint64]stockRow, len(stockRows))
+	for _, sr := range stockRows {
+		stockMap[sr.ProductID] = sr
+	}
+
+	// ── 4. Ensamblar resultado ──
+	items := make([]ProductResume, len(rows))
+	for i, row := range rows {
+		sr := stockMap[row.ID]
+		items[i] = ProductResume{
+			ID:           row.ID,
+			Name:         row.Name,
+			Code:         row.Code,
+			SetName:      row.SetName,
+			Rarity:       row.Rarity,
+			RarityCode:   row.RarityCode,
+			Image:        row.Image,
+			GlobalStock:  sr.GlobalStock,
+			AveragePrice: sr.AveragePrice,
+		}
 	}
 
 	page.Items = items
