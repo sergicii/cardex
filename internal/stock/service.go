@@ -25,6 +25,7 @@ type Service interface {
 	GetStockByID(id uint64) (*Stock, error)
 	GetLogsByStockID(stockID uint64) ([]Log, error)
 	OpenBox(input OpenBoxInput) (*Stock, error)
+	DeleteStock(userID string, id uint64) error
 }
 
 type service struct {
@@ -209,6 +210,17 @@ func (s *service) GetStockByUserID(userID string, input FilterInput) (StockPage,
 
 func (s *service) GetMyStockFilters(userID string, input FilterInput) (FilterOutput, error) {
 	return s.repo.GetFiltersByUserID(userID, input)
+}
+
+func (s *service) DeleteStock(userID string, id uint64) error {
+	st, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+	if st.UserID != userID {
+		return fmt.Errorf("no autorizado para eliminar este stock")
+	}
+	return s.repo.Delete(id)
 }
 
 func (s *service) GetStockByID(id uint64) (*Stock, error) {

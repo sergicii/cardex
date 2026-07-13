@@ -142,6 +142,8 @@ func (s *Server) setupRoutes() {
 		stockGroup.POST("/user/:user_id", auth, s.stockHandler.GetByUserID)
 		// GET /stock/id/:id — requiere ownership
 		stockGroup.GET("/id/:id", auth, ownership, s.stockHandler.GetByID)
+		// DELETE /stock/:id
+		stockGroup.DELETE("/:id", auth, s.stockHandler.Delete)
 		// GET /stock/logs/:stock_id — requiere ownership
 		stockGroup.GET("/logs/:stock_id", auth, ownership, s.stockHandler.GetLogs)
 		// POST /stock

@@ -11,7 +11,7 @@ cardex
 vendor/
 
 # IDEs
-.vscode/
+temp_auto_push.bat
 .idea/
 *.swp
 *.swo
@@ -21,8 +21,11 @@ vendor/
 Thumbs.db
 
 # Docker & DB
-.env
 postgres_data/
 
 # Logs
 *.log
+.gitignore
+branch_structure.json
+config.bat
+node_modules

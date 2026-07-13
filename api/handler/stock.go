@@ -283,6 +283,25 @@ func (h *StockHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, s)
 }
 
+// DELETE /stock/:id
+func (h *StockHandler) Delete(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+
+	if err := h.service.DeleteStock(userID.(string), id); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Stock eliminado exitosamente"})
+}
+
 // GetLogs obtiene el historial de logs de un stock.
 // GET /stock/logs/:stock_id
 func (h *StockHandler) GetLogs(c *gin.Context) {
