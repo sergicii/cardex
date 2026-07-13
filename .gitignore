@@ -11,7 +11,7 @@ cardex
 vendor/
 
 # IDEs
-.vscode/
+temp_auto_push.bat
 .idea/
 *.swp
 *.swo
@@ -26,3 +26,5 @@ postgres_data/
 
 # Logs
 *.log
+.gitignore
+branch_structure.json
