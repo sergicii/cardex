@@ -22,6 +22,8 @@ type Repository interface {
 	FindByLogID(id uint64) (*Log, error)
 	GetLogsByStockID(stockID uint64) ([]Log, error)
 
+	Delete(id uint64) error
+
 	RunInTransaction(fn func(tx Repository) error) error
 }
 
@@ -258,6 +260,22 @@ func (r *repository) UpdatePrice(id uint64, price, discountPrice float64) error 
 
 func (r *repository) Update(stock *Stock) error {
 	return r.db.Save(stock).Error
+}
+
+func (r *repository) Delete(id uint64) error {
+	// Eliminar logs asociados para evitar violación de llave foránea
+	if err := r.db.Where("stock_id = ?", id).Delete(&Log{}).Error; err != nil {
+		return err
+	}
+
+	result := r.db.Where("id = ?", id).Delete(&Stock{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrStockNotFound
+	}
+	return nil
 }
 
 func (r *repository) CreateLog(log *Log) error {
